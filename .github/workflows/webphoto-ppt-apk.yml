@@ -1,0 +1,37 @@
+name: Web Photo to PPT — Build APK
+on:
+  push:
+    branches: [webphoto-to-ppt-20261026]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract Web Photo Android project
+        run: |
+          base64 -d webphoto-ppt-source.b64 > /tmp/webphoto-source.tar.xz
+          mkdir -p /tmp/webphoto-app
+          tar -xJf /tmp/webphoto-source.tar.xz -C /tmp/webphoto-app
+          test -f /tmp/webphoto-app/app/src/main/AndroidManifest.xml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile Web Photo to PPT APK
+        working-directory: /tmp/webphoto-app
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Publish installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebPhotoToPPT-Android-APK
+          path: /tmp/webphoto-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
