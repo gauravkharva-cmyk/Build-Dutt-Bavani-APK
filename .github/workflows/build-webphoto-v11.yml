@@ -1,0 +1,39 @@
+name: Build Web Photo to PPT APK (MHT fix)
+on:
+  push:
+    branches:
+      - webphoto-to-ppt-20261026
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack isolated Web Photo project
+        run: |
+          base64 -d webphoto-v11-source.b64 | tar -xz
+          test -f app/src/main/java/com/gauravkharva/webphotoppt/MhtmlArchiveReader.java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build installable Android APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify built APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          unzip -t app/build/outputs/apk/debug/app-debug.apk | tail -1
+      - name: Upload fixed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebPhotoToPPT-v1_1-MHT-fixed-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
