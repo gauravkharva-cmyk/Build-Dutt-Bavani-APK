@@ -1,0 +1,48 @@
+name: Build WebPhoto v1.3 APK (MHT detection fix)
+on:
+  push:
+    branches: [webphoto-to-ppt-20261026]
+    paths:
+      - 'webphoto-v13-source.b64'
+      - '.github/workflows/build-webphoto-v13.yml'
+  workflow_dispatch:
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract isolated v1.3 project
+        run: |
+          mkdir -p /tmp/webphoto-v13
+          base64 -d webphoto-v13-source.b64 | tar -xz -C /tmp/webphoto-v13
+          test -f /tmp/webphoto-v13/app/src/main/java/com/gauravkharva/webphotoppt/MainActivity.java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK tools
+        run: |
+          SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools -type f -name sdkmanager | head -n 1)"; fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        run: |
+          cd /tmp/webphoto-v13
+          gradle --no-daemon :app:assembleDebug
+      - name: Validate APK
+        run: |
+          test -s /tmp/webphoto-v13/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t /tmp/webphoto-v13/app/build/outputs/apk/debug/app-debug.apk | tail -1
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebPhotoToPPT-v1.3-APK
+          path: /tmp/webphoto-v13/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
