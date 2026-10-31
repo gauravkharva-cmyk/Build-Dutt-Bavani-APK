@@ -3,15 +3,15 @@ import android.content.Context;
 import android.graphics.*;
 import android.view.View;
 public final class SpectrumView extends View {
- private double[] bands,leq;private String[] names=OctaveAnalyzer.THIRD;private boolean calibrated=false;
+ private double[] bands,leq;private String[] names=OctaveAnalyzer.THIRD;private int scaleMode=3;
  private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);private final float den;
  public SpectrumView(Context ctx){super(ctx);den=getResources().getDisplayMetrics().density;setBackgroundColor(Color.rgb(18,31,48));}
  private float dp(float x){return den*x;}
- public void show(String[] labels,double[] values,double[] avg,boolean cal){names=labels;bands=values;leq=avg;calibrated=cal;requestLayout();invalidate();}
+ public void show(String[] labels,double[] values,double[] avg,int mode){names=labels;bands=values;leq=avg;scaleMode=mode;requestLayout();invalidate();}
  @Override protected void onMeasure(int w,int h){setMeasuredDimension(Math.max(MeasureSpec.getSize(w),(int)dp(55+names.length*(names.length>12?34:50))),(int)dp(260));}
  @Override protected void onDraw(Canvas c){
   float left=dp(43),top=dp(19),bottom=getHeight()-dp(45),right=getWidth()-dp(15);
-  double min=calibrated?20:-100,max=calibrated?140:0;
+  double min=scaleMode==3?0:scaleMode==0?-100:20,max=scaleMode==3?100:scaleMode==0?0:140;
   p.setTextSize(dp(11));p.setTypeface(Typeface.DEFAULT);
   for(int j=0;j<=6;j++){
    double val=min+(max-min)*j/6.0;
