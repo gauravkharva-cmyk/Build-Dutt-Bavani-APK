@@ -40,7 +40,7 @@ public final class MainActivity extends Activity {
  private double relativeAdjustment=0.0;
  private int levelMode=4; // 4=automatic factory/Android unprocessed SPL reference, 0=raw dBFS.
  private double factorySensitivity=Double.NaN; // dBFS for 94 dB SPL at 1 kHz
- private int factoryMethod=0; // 0=unavailable; 1=Android mic metadata; 2=Android CDD nominal unprocessed
+ private int factoryMethod=0; // 0=unavailable; 1=UNPROCESSED metadata; 2=CDD nominal; 3=MIC metadata (gain unverified)
  private boolean supportsUnprocessed=false; private int activeMicrophoneCount=0;
  private String factoryMessage="SPL reference not yet checked";
 
@@ -200,6 +200,7 @@ public final class MainActivity extends Activity {
   if(levelMode==0)return "raw dBFS (uncalibrated)";
   if(factoryMethod==1)return "dB SPL (device sensitivity; indicative)";
   if(factoryMethod==2)return "dB SPL (Android unprocessed nominal; indicative)";
+  if(factoryMethod==3)return "estimated SPL (microphone metadata; MIC gain unverified)";
   return "dBFS (factory acoustic reference unavailable)";
  }
  private double withCal(double d){return d+activeOffset();}
@@ -219,6 +220,7 @@ public final class MainActivity extends Activity {
     calibrationBadge.setText(levelMode==0?"RAW DIGITAL INPUT  •  dBFS":
       factoryMethod==1?"MIC SENSITIVITY FROM ANDROID  •  "+fmt(factorySensitivity)+" dBFS @ 94 dB SPL":
       factoryMethod==2?"ANDROID UNPROCESSED REFERENCE  •  nominal 94 dB SPL at -36 dBFS":
+      factoryMethod==3?"MIC HARDWARE SENSITIVITY  •  audio gain unverified":
       "ABSOLUTE SPL NOT AVAILABLE  •  device factory reference missing");
     calibrationBadge.setTextColor(factoryMethod==0?Color.rgb(252,206,113):GREEN);
   }
@@ -246,10 +248,6 @@ public final class MainActivity extends Activity {
  private void evaluateFactoryReference(AudioRecord mic,boolean declaredUnprocessed){
   factorySensitivity=Double.NaN;factoryMethod=0;activeMicrophoneCount=0;
   factoryMessage="No Android factory microphone reference available";
-  if(!declaredUnprocessed){
-   factoryMessage="Unprocessed microphone support not declared. Showing raw dBFS.";
-   return;
-  }
   try{
    List<MicrophoneInfo> active=mic.getActiveMicrophones();
    activeMicrophoneCount=active==null?0:active.size();
@@ -257,17 +255,27 @@ public final class MainActivity extends Activity {
     float sens=active.get(0).getSensitivity();
     if(sens!=MicrophoneInfo.SENSITIVITY_UNKNOWN&&Float.isFinite(sens)
       &&sens< -0.01f&&sens> -130f){
-      factorySensitivity=sens;factoryMethod=1;
-      factoryMessage="Android-reported active microphone sensitivity ("+fmt(sens)+" dBFS at 94 dB SPL, 1 kHz)";
+      factorySensitivity=sens;factoryMethod=declaredUnprocessed?1:3;
+      factoryMessage="Android-reported active microphone sensitivity ("+fmt(sens)+" dBFS at 94 dB SPL, 1 kHz). "+(declaredUnprocessed?"UNPROCESSED path":"MIC input: automatic gain or signal processing may invalidate SPL");
       return;
     }
    }
   }catch(Exception ignored){}
+  if(!declaredUnprocessed){
+   factoryMessage="UNPROCESSED not declared; MIC sensitivity metadata unknown. Only raw dBFS is supportable.";
+   return;
+  }
   // Android CDD requires 16-bit PCM RMS 520 for a 1-kHz 94-dB-SPL tone
   // ONLY when UNPROCESSED is advertised. Nominal, not user entered calibration.
   factorySensitivity=20*Math.log10(520.0/32768.0);
   factoryMethod=2;
   factoryMessage="Android CDD 94 dB SPL @ 1 kHz nominal UNPROCESSED reference; not individually verified";
+ }
+ private void showDspTest(){
+  String result=OctaveAnalyzer.selfTest();
+  new AlertDialog.Builder(this).setTitle("FFT algorithm self-test")
+   .setMessage(result+"\n\nA passing test verifies the calculations against synthetic PCM. It cannot verify microphone sensitivity, automatic gain, or actual dB SPL.")
+   .setPositiveButton("OK",null).show();
  }
  private void showMicrophoneInfo(){
   String msg="Model: "+android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL
@@ -426,6 +434,8 @@ public final class MainActivity extends Activity {
     .setOnMenuItemClickListener(item->{showLevelModes();return true;});
   popup.getMenu().add("Inspect Android microphone reference")
     .setOnMenuItemClickListener(item->{showMicrophoneInfo();return true;});
+  popup.getMenu().add("Run FFT algorithm self-test")
+    .setOnMenuItemClickListener(item->{showDspTest();return true;});
   popup.getMenu().add("Clear current readings")
     .setOnMenuItemClickListener(item->{
       if(recording){toast("Stop measurement before clearing readings");return true;}
@@ -623,6 +633,7 @@ public final class MainActivity extends Activity {
   sb.append("Active microphones,").append(activeMicrophoneCount).append("\n");
   sb.append("Units,").append(levelUnits()).append("\n");
   sb.append("Reference method,").append(factoryMessage).append("\n");
+  sb.append("FFT digital reference,3-tone synthetic RMS self-test under Options (not acoustic calibration)\n");
   sb.append("Factory sensitivity dBFS at 94 dB SPL,").append(factoryMethod==0?"unknown":fmt(factorySensitivity)).append("\n");
   sb.append("User manual adjustment,none\n");
   sb.append("Measurement setting,").append(durationLabel()).append("\n");

@@ -48,6 +48,35 @@ public final class OctaveAnalyzer {
   double[] levels=new double[c.length];for(int j=0;j<c.length;j++)levels[j]=db(powers[j]);
   return new Result(names,c,levels,db(total),db(oneK),db(totalZ),clip);
  }
+
+ /** DSP validation uses only deterministic digital PCM: no physical SPL inference. */
+ public static String selfTest(){
+  int[] frequencies={1000,500,5000};
+  double[] amplitudes={0.5,0.1,0.8};
+  StringBuilder result=new StringBuilder();
+  boolean pass=true;
+  for(int j=0;j<frequencies.length;j++){
+   short[] samples=new short[N];
+   double energy=0;
+   for(int i=0;i<N;i++){
+    samples[i]=(short)Math.round(amplitudes[j]*32767*Math.sin(2*Math.PI*frequencies[j]*i/48000.0));
+    double x=samples[i]/32768.0;
+    energy+=x*x;
+   }
+   double expected=20*Math.log10(Math.sqrt(energy/N));
+   double actual=analyze(samples,48000,3,0).overall;
+   double difference=Math.abs(actual-expected);
+   boolean okay=difference<0.1;
+   pass=pass&&okay;
+   result.append(frequencies[j]).append(" Hz: expected ")
+    .append(String.format(Locale.US,"%.2f",expected)).append(" dBFS; FFT ")
+    .append(String.format(Locale.US,"%.2f",actual)).append(" dBFS; difference ")
+    .append(String.format(Locale.US,"%.3f",difference))
+    .append(" dB  ").append(okay?"PASS":"FAIL").append("\\n");
+  }
+  result.insert(0,pass?"FFT normalization: PASS\\n\\n":"FFT normalization: FAIL\\n\\n");
+  return result.toString();
+ }
  private static void fft(double[] re,double[] im){
   int n=re.length;
   for(int i=1,j=0;i<n;i++){
