@@ -33,6 +33,8 @@ public final class MainActivity extends Activity {
  private Thread worker;
  private OctaveAnalyzer.Result last;
  private double[] sumP,leq; private double overallP=0,overallLeq=OctaveAnalyzer.FLOOR,calibration=Double.NaN;
+ private double estimateOffset=Double.NaN,assumedDBA=Double.NaN;
+ private int levelMode=0; // 0=raw dBFS, 1=assumed ambient estimate, 2=physical calibration
  private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton;
@@ -50,6 +52,13 @@ public final class MainActivity extends Activity {
    getPreferences(MODE_PRIVATE).edit().remove("offset").apply();
   }
   durationSeconds=getPreferences(MODE_PRIVATE).getInt("durationSeconds",60);
+  if(getPreferences(MODE_PRIVATE).getBoolean("roughSet",false)){
+   estimateOffset=Double.longBitsToDouble(getPreferences(MODE_PRIVATE).getLong("estimateOffset",Double.doubleToLongBits(Double.NaN)));
+   assumedDBA=Double.longBitsToDouble(getPreferences(MODE_PRIVATE).getLong("assumedDBA",Double.doubleToLongBits(Double.NaN)));
+  }
+  levelMode=getPreferences(MODE_PRIVATE).getInt("levelMode",0);
+  if(levelMode==1&&!Double.isFinite(estimateOffset))levelMode=0;
+  if(levelMode==2&&!Double.isFinite(calibration))levelMode=0;
   ui();reset();refresh();
  }
  private int px(float d){return (int)(d*getResources().getDisplayMetrics().density+0.5f);}
@@ -115,11 +124,11 @@ public final class MainActivity extends Activity {
   start=btn("Start measuring",GREEN);content.addView(start,lp(-1,px(51),11));
   start.setOnClickListener(v->{if(recording)stop();else begin();});
   LinearLayout actions=row();content.addView(actions,lp(-1,px(48),14));
-  calButton=btn("Calibration / Reset",Color.rgb(129,185,237));
+  calButton=btn("Level / Estimate",Color.rgb(129,185,237));
   saveButton=btn("Save CSV",Color.rgb(252,206,113));
   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);left.rightMargin=px(8);
   actions.addView(calButton,left);actions.addView(saveButton,new LinearLayout.LayoutParams(0,-1,1));
-  calButton.setOnClickListener(v->calibrate());saveButton.setOnClickListener(v->export());
+  calButton.setOnClickListener(v->showLevelModes());saveButton.setOnClickListener(v->export());
   content.addView(txt("LIVE FREQUENCY SPECTRUM",12,GREY,true),lp(-1,-2,8));
   chart=new SpectrumView(this);
   HorizontalScrollView h=new HorizontalScrollView(this);h.setBackground(bg(PANEL));h.addView(chart);
@@ -127,7 +136,7 @@ public final class MainActivity extends Activity {
   content.addView(txt("BAND LEVELS (Hz / LIVE / Leq)",12,GREY,true),lp(-1,-2,7));
   table=col();table.setBackground(bg(PANEL));table.setPadding(px(12),px(10),px(12),px(10));
   content.addView(table,lp(-1,-2,12));makeTable();
-  content.addView(txt("Negative values are expected in dBFS. Calibrate with a known 1 kHz acoustic reference for approximate positive dB SPL readings. This FFT analyzer is not IEC 61260-1 Class 1/2 or IEC 61672 certified. Use certified equipment for formal testing.",12,GREY,false),lp(-1,-2,13));
+  content.addView(txt("Raw dBFS is normally negative. Positive levels shown in Estimated mode rely ONLY on an ASSUMED background level, and may have large errors. Never use this uncalibrated mode for motor noise acceptance, hearing safety or IEC compliance.",12,GREY,false),lp(-1,-2,13));
   TextView credit=txt("Developed By: Gaurav Kharva",12,GREY,true);
   credit.setGravity(Gravity.END);content.addView(credit);
  }
@@ -154,30 +163,34 @@ public final class MainActivity extends Activity {
  private void reset(){
   autoStopped=false;
   synchronized(lock){frames=0;sumP=null;leq=null;overallP=0;overallLeq=OctaveAnalyzer.FLOOR;last=null;}
-  if(chart!=null)chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,null,null,!Double.isNaN(calibration));
+  if(chart!=null)chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,null,null,levelMode!=0);
  }
  private String fmt(double d){return String.format(Locale.US,"%.1f",d);}
- private double withCal(double d){return d+(Double.isNaN(calibration)?0:calibration);}
+ private double activeOffset(){return levelMode==1?estimateOffset:levelMode==2?calibration:0.0;}
+ private String levelUnits(){return levelMode==1?"estimated dB SPL (UNVERIFIED)":levelMode==2?"dB SPL (1 kHz reference)":"dBFS (raw)";}
+ private double withCal(double d){return d+activeOffset();}
  private double[] offset(double[] a){
   if(a==null)return null;double[] r=a.clone();
-  if(!Double.isNaN(calibration))for(int i=0;i<r.length;i++)r[i]+=calibration;
+  for(int i=0;i<r.length;i++)r[i]+=activeOffset();
   return r;
  }
  private void refresh(){
   if(status==null)return;
   OctaveAnalyzer.Result r;double[] l;double sum;int count;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
-  boolean c=!Double.isNaN(calibration);
+  boolean c=levelMode!=0;
   status.setText(recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
   if(calibrationBadge!=null){
-   calibrationBadge.setText(c?"CALIBRATED (indicative)   •   offset "+fmt(calibration)+" dB":
-    "UNVERIFIED CALIBRATION CLEARED   •   dBFS only");
-   calibrationBadge.setTextColor(c?GREEN:Color.rgb(252,206,113));
+   calibrationBadge.setText(levelMode==1
+     ?"ESTIMATE ONLY – assumed "+fmt(assumedDBA)+" dBA background; not calibrated"
+     :levelMode==2?"PHYSICAL REFERENCE (indicative); offset "+fmt(calibration)+" dB"
+     :"RAW dBFS – negative values are normal");
+   calibrationBadge.setTextColor(levelMode==2?GREEN:Color.rgb(252,206,113));
   }
   level.setText(r==null?"--.-":fmt(withCal(r.overall)));
-  units.setText((c?"dB SPL (1 kHz calibrated)":"dBFS (uncalibrated)")+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
-  average.setText(r==null?"Leq: --.-":"Leq: "+fmt(withCal(sum))+(c?" dB SPL":" dBFS"));
+  units.setText(levelUnits()+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
+  average.setText(r==null?"Leq: --.-":"Leq: "+fmt(withCal(sum))+(levelMode==0?" dBFS":levelMode==1?" est. dB SPL":" dB SPL"));
   long measuredSec=Math.round((double)count*OctaveAnalyzer.N/rate);
   details.setText(String.format(Locale.US,"Time %02d:%02d   •   %d Hz   •   %s",
     measuredSec/60,measuredSec%60,rate,source));
@@ -319,7 +332,9 @@ public final class MainActivity extends Activity {
   PopupMenu popup=new PopupMenu(this,anchor);
   popup.getMenu().add("Time for measurement  •  "+durationLabel()).setOnMenuItemClickListener(item->{chooseDuration();return true;});
   popup.getMenu().add("Save readings to CSV").setOnMenuItemClickListener(item->{export();return true;});
-  popup.getMenu().add("Calibration / Reset").setOnMenuItemClickListener(item->{calibrate();return true;});
+  popup.getMenu().add("Display mode / No-equipment estimate").setOnMenuItemClickListener(item->{showLevelModes();return true;});
+  popup.getMenu().add("Estimate from assumed quiet room").setOnMenuItemClickListener(item->{estimateFromRoom();return true;});
+  popup.getMenu().add("Physical calibration").setOnMenuItemClickListener(item->{calibrate();return true;});
   popup.getMenu().add("Clear calibration (dBFS mode)").setOnMenuItemClickListener(item->{resetCalibration();return true;});
   popup.getMenu().add("Clear current readings").setOnMenuItemClickListener(item->{
     if(recording){toast("Stop measurement before clearing readings");return true;}
@@ -327,9 +342,91 @@ public final class MainActivity extends Activity {
   });
   popup.show();
  }
+
+ private void showLevelModes(){
+  String[] modes={"Use raw dBFS (no assumptions)","Estimate positive dB from quiet-room assumption",
+                  "Reuse stored approximate estimate","Physical 1 kHz calibration",
+                  "Erase estimated reference"};
+  new AlertDialog.Builder(this).setTitle("Sound level display")
+   .setMessage("The microphone alone cannot determine absolute SPL. Estimated mode uses a user-selected ASSUMED background level and is unsuitable for formal measurements.")
+   .setItems(modes,(dialog,which)->{
+    if(which==0){if(recording){toast("Stop first");return;}levelMode=0;reset();refresh();storeLevelMode();}
+    else if(which==1)estimateFromRoom();
+    else if(which==2){
+     if(recording){toast("Stop first");return;}
+     if(!Double.isFinite(estimateOffset)){toast("Set a room assumption first.");return;}
+     levelMode=1;reset();refresh();storeLevelMode();
+    }else if(which==3)calibrate();
+    else eraseEstimate();
+   }).setNegativeButton("Close",null).show();
+ }
+ private void storeLevelMode(){
+  getPreferences(MODE_PRIVATE).edit().putInt("levelMode",levelMode).apply();
+ }
+ private void eraseEstimate(){
+  if(recording){toast("Stop measurement first");return;}
+  estimateOffset=Double.NaN;assumedDBA=Double.NaN;
+  if(levelMode==1)levelMode=0;
+  getPreferences(MODE_PRIVATE).edit().remove("estimateOffset").remove("assumedDBA")
+     .putBoolean("roughSet",false).putInt("levelMode",levelMode).apply();
+  reset();refresh();toast("Assumed reference cleared");
+ }
+ private void estimateFromRoom(){
+  if(recording){toast("Stop first, then open Estimate");return;}
+  if(weighting!=1){
+   new AlertDialog.Builder(this).setTitle("Use A weighting")
+    .setMessage("Select A weighting, record a quiet room for at least 10 seconds, stop, then return to this screen. This is still only an assumed reference, not acoustic calibration.")
+    .setPositiveButton("OK",null).show();
+   return;
+  }
+  int count;double baseline;boolean clipping;
+  synchronized(lock){count=frames;baseline=overallLeq;clipping=last!=null&&last.clip;}
+  double sec=count*(double)OctaveAnalyzer.N/rate;
+  if(sec<8 || !Double.isFinite(baseline)){
+   new AlertDialog.Builder(this).setTitle("Record quiet-room baseline")
+     .setMessage("In a quiet room with no speech, record 10–20 seconds of ambient sound with A weighting selected. Stop measurement, then tap Level / Estimate again. Nothing will be claimed calibrated.")
+     .setPositiveButton("OK",null).show();
+   return;
+  }
+  if(clipping){toast("Audio clipped. Repeat the quiet-room recording.");return;}
+  String[] choices={"Assume 30 dBA","Assume 35 dBA","Assume 40 dBA","Assume 45 dBA","Assume 50 dBA","Custom assumption..."};
+  new AlertDialog.Builder(this).setTitle("Assume background sound level")
+   .setMessage("Quiet-room digital Leq: "+fmt(baseline)+" dBFS over "+fmt(sec)+" s.\nChoose the A-weighted sound level you ASSUME was present. The actual value is unknown; errors can exceed 10 dB.")
+   .setItems(choices,(dlg,i)->{
+    if(i<5)confirmEstimate(new int[]{30,35,40,45,50}[i],baseline);
+    else{
+     EditText input=new EditText(this);
+     input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+     input.setHint("Assumed dBA (20–80)");
+     LinearLayout wrap=col();wrap.setPadding(px(20),0,px(20),0);wrap.addView(input);
+     new AlertDialog.Builder(this).setTitle("Assumed room dBA")
+       .setView(wrap).setPositiveButton("Continue",(dd,w)->{
+         try{double level=Double.parseDouble(input.getText().toString());
+         if(!Double.isFinite(level)||level<20||level>80)throw new NumberFormatException();
+         confirmEstimate(level,baseline);
+         }catch(Exception ex){toast("Enter assumed dBA between 20 and 80.");}
+       }).setNegativeButton("Cancel",null).show();
+    }
+   }).setNegativeButton("Cancel",null).show();
+ }
+ private void confirmEstimate(double assumed,double baseline){
+  double shift=assumed-baseline;
+  new AlertDialog.Builder(this).setTitle("Enable rough estimate?")
+   .setMessage("Assumed background: "+fmt(assumed)+" dBA\nRecorded uncalibrated level: "+fmt(baseline)+" dBFS\nOffset: "+fmt(shift)+" dB.\n\nThis offset is an ASSUMPTION, not measurement or calibration. Actual values can be substantially different. Do not use for engineering acceptance or personal safety decisions.")
+   .setPositiveButton("USE ESTIMATE",(dlg,i)->{
+     assumedDBA=assumed;estimateOffset=shift;levelMode=1;
+     getPreferences(MODE_PRIVATE).edit().putBoolean("roughSet",true)
+      .putLong("estimateOffset",Double.doubleToLongBits(estimateOffset))
+      .putLong("assumedDBA",Double.doubleToLongBits(assumedDBA))
+      .putInt("levelMode",1).apply();
+     reset();refresh();toast("Estimate enabled. Start a new measurement.");
+   }).setNegativeButton("Cancel",null).show();
+ }
+
  private void resetCalibration(){
   calibration=Double.NaN;
-  getPreferences(MODE_PRIVATE).edit().remove("offset").putBoolean("offsetVerified",false).apply();
+  if(levelMode==2)levelMode=0;
+  getPreferences(MODE_PRIVATE).edit().remove("offset").putBoolean("offsetVerified",false).putInt("levelMode",levelMode).apply();
   reset();refresh();
   toast("Calibration cleared. Measurements now show uncalibrated dBFS.");
  }
@@ -391,9 +488,10 @@ public final class MainActivity extends Activity {
        double reference=Double.parseDouble(input.getText().toString().trim());
        if(reference<40||reference>140||!Double.isFinite(reference))throw new NumberFormatException();
        calibration=reference-measuredOneK;
+       levelMode=2;
        getPreferences(MODE_PRIVATE).edit()
         .putLong("offset",Double.doubleToLongBits(calibration))
-        .putBoolean("offsetVerified",true).apply();
+        .putBoolean("offsetVerified",true).putInt("levelMode",2).apply();
        reset();refresh();
        toast("Reference saved. Start a new measurement.");
      }catch(Exception ex){toast("Enter a valid reference from 40 to 140 dB SPL.");}
@@ -410,15 +508,16 @@ public final class MainActivity extends Activity {
   s.append("Band mode,").append(mode==1?"1/1 Octave":"1/3 Octave").append("\n");
   s.append("Weighting,").append(new String[]{"Z","A","C"}[weighting]).append("\n");
   s.append("Sample rate (Hz),").append(rate).append("\n");
-  s.append("Units,").append(Double.isNaN(calibration)?"dBFS":"dB SPL (1kHz calibrated)").append("\n");
+  s.append("Units,").append(levelUnits()).append("\n");
   s.append("Measurement time setting,").append(durationLabel()).append("\n");
   s.append("Measured duration (seconds),").append(String.format(Locale.US,"%.2f",(double)count*OctaveAnalyzer.N/rate)).append("\n");
   s.append("Number of frames,").append(count).append("\n");
   s.append("Overall live level,").append(fmt(withCal(r.overall))).append("\n");
   s.append("Overall Leq level,").append(fmt(withCal(overall))).append("\n");
-  s.append("Calibration status,").append(Double.isNaN(calibration)?"Uncalibrated dBFS":"1 kHz acoustic reference (indicative dB SPL)").append("\n");
-  if(!Double.isNaN(calibration))s.append("Calibration offset dB,").append(fmt(calibration)).append("\n");
-  s.append("Note,This is FFT analysis and is not a certified sound-level meter.").append("\n");
+   s.append("Measurement reference,").append(levelMode==1?"Assumed environment ONLY":levelMode==2?"Physical reference":"Uncalibrated raw audio").append("\n");
+  if(levelMode==1){s.append("Assumed room level dBA,").append(fmt(assumedDBA)).append("\n");s.append("Unverified dB offset,").append(fmt(estimateOffset)).append("\n");}
+  if(levelMode==2)s.append("Physical calibration offset dB,").append(fmt(calibration)).append("\n");
+  s.append("Note,Estimated SPL values depend on an assumed background sound level and may be very inaccurate. Not suitable for compliance.").append("\n");
   s.append("Center frequency Hz,Live level,Leq level\n");
   for(int i=0;i<r.live.length;i++){
    s.append(String.format(Locale.US,"%.3f,%.2f,%.2f\n",r.center[i],withCal(r.live[i]),withCal(l[i])));
