@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
  private Thread worker;
  private OctaveAnalyzer.Result last;
  private double[] sumP,leq; private double overallP=0,overallLeq=OctaveAnalyzer.FLOOR,calibration=Double.NaN;
- private TextView status,level,units,average,details,warning,durationBadge;
+ private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton;
  private String pendingCsv;
@@ -41,8 +41,14 @@ public final class MainActivity extends Activity {
 
  @Override public void onCreate(Bundle state){
   super.onCreate(state);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
-  long bits=getPreferences(MODE_PRIVATE).getLong("offset",Double.doubleToLongBits(Double.NaN));
-  calibration=Double.longBitsToDouble(bits);
+  // v1.2 deliberately ignores earlier unconfirmed offsets. Old values can overstate SPL.
+  if(getPreferences(MODE_PRIVATE).getBoolean("offsetVerified",false)){
+   long bits=getPreferences(MODE_PRIVATE).getLong("offset",Double.doubleToLongBits(Double.NaN));
+   calibration=Double.longBitsToDouble(bits);
+  }else{
+   calibration=Double.NaN;
+   getPreferences(MODE_PRIVATE).edit().remove("offset").apply();
+  }
   durationSeconds=getPreferences(MODE_PRIVATE).getInt("durationSeconds",60);
   ui();reset();refresh();
  }
@@ -83,7 +89,8 @@ public final class MainActivity extends Activity {
   panel.setBackground(bg(PANEL));content.addView(panel,lp(-1,-2,14));
   status=txt("Ready",13,GREEN,true);panel.addView(status,lp(-1,-2,6));
   level=txt("--.-",48,WHITE,true);panel.addView(level);
-  units=txt("dBFS  •  uncalibrated",13,GREY,false);panel.addView(units,lp(-1,-2,8));
+  units=txt("dBFS  •  uncalibrated",13,GREY,false);panel.addView(units,lp(-1,-2,4));
+  calibrationBadge=txt("",13,Color.rgb(252,206,113),true);panel.addView(calibrationBadge,lp(-1,-2,9));
   average=txt("Leq: --.-",16,GREEN,true);panel.addView(average,lp(-1,-2,8));
   details=txt("Sample rate: --",12,GREY,false);panel.addView(details,lp(-1,-2,3));
   warning=txt("",12,Color.rgb(255,134,128),true);panel.addView(warning);
@@ -108,7 +115,7 @@ public final class MainActivity extends Activity {
   start=btn("Start measuring",GREEN);content.addView(start,lp(-1,px(51),11));
   start.setOnClickListener(v->{if(recording)stop();else begin();});
   LinearLayout actions=row();content.addView(actions,lp(-1,px(48),14));
-  calButton=btn("Calibrate 1 kHz",Color.rgb(129,185,237));
+  calButton=btn("Calibration / Reset",Color.rgb(129,185,237));
   saveButton=btn("Save CSV",Color.rgb(252,206,113));
   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);left.rightMargin=px(8);
   actions.addView(calButton,left);actions.addView(saveButton,new LinearLayout.LayoutParams(0,-1,1));
@@ -163,6 +170,11 @@ public final class MainActivity extends Activity {
   boolean c=!Double.isNaN(calibration);
   status.setText(recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
+  if(calibrationBadge!=null){
+   calibrationBadge.setText(c?"CALIBRATED (indicative)   •   offset "+fmt(calibration)+" dB":
+    "UNVERIFIED CALIBRATION CLEARED   •   dBFS only");
+   calibrationBadge.setTextColor(c?GREEN:Color.rgb(252,206,113));
+  }
   level.setText(r==null?"--.-":fmt(withCal(r.overall)));
   units.setText((c?"dB SPL (1 kHz calibrated)":"dBFS (uncalibrated)")+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
   average.setText(r==null?"Leq: --.-":"Leq: "+fmt(withCal(sum))+(c?" dB SPL":" dBFS"));
@@ -180,7 +192,7 @@ public final class MainActivity extends Activity {
     ((TextView)row.getChildAt(2)).setText(l==null?"--":fmt(withCal(l[i])));
    }
   }
-  calButton.setEnabled(r!=null);saveButton.setEnabled(r!=null);
+  calButton.setEnabled(true);saveButton.setEnabled(r!=null);
   start.setText(recording?"Stop measuring":"Start measuring");
   start.setBackground(bg(recording?Color.rgb(255,146,124):GREEN));
  }
@@ -307,31 +319,87 @@ public final class MainActivity extends Activity {
   PopupMenu popup=new PopupMenu(this,anchor);
   popup.getMenu().add("Time for measurement  •  "+durationLabel()).setOnMenuItemClickListener(item->{chooseDuration();return true;});
   popup.getMenu().add("Save readings to CSV").setOnMenuItemClickListener(item->{export();return true;});
-  popup.getMenu().add("Calibrate 1 kHz microphone").setOnMenuItemClickListener(item->{calibrate();return true;});
+  popup.getMenu().add("Calibration / Reset").setOnMenuItemClickListener(item->{calibrate();return true;});
+  popup.getMenu().add("Clear calibration (dBFS mode)").setOnMenuItemClickListener(item->{resetCalibration();return true;});
   popup.getMenu().add("Clear current readings").setOnMenuItemClickListener(item->{
     if(recording){toast("Stop measurement before clearing readings");return true;}
     reset();refresh();return true;
   });
   popup.show();
  }
+ private void resetCalibration(){
+  calibration=Double.NaN;
+  getPreferences(MODE_PRIVATE).edit().remove("offset").putBoolean("offsetVerified",false).apply();
+  reset();refresh();
+  toast("Calibration cleared. Measurements now show uncalibrated dBFS.");
+ }
  private void calibrate(){
-  OctaveAnalyzer.Result r;synchronized(lock){r=last;}
-  if(r==null){toast("Measure a 1 kHz reference first");return;}
-  EditText input=new EditText(this);input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  String[] choices=Double.isNaN(calibration)
+    ?new String[]{"Calibrate with a real 1 kHz reference"}
+    :new String[]{"Reset calibration (recommended if SPL is too high)","Recalibrate using a real 1 kHz reference"};
+  new AlertDialog.Builder(this).setTitle("Acoustic calibration / reset")
+   .setMessage("Positive dB SPL requires a known acoustic reference. Simply entering 94 dB without a calibrator creates incorrect, often excessively high readings.")
+   .setItems(choices,(dialog,which)->{
+    if(!Double.isNaN(calibration)&&which==0)resetCalibration();
+    else openCalibrationReferenceDialog();
+   }).setNegativeButton("Close",null).show();
+ }
+ private void openCalibrationReferenceDialog(){
+  if(recording){
+   toast("Stop measuring with the 1 kHz calibrator applied, then calibrate.");
+   return;
+  }
+  OctaveAnalyzer.Result r;
+  synchronized(lock){r=last;}
+  if(r==null){toast("First measure a physically applied 1 kHz calibrator, then stop.");return;}
+  // A 1 kHz acoustic calibrator should dominate the unweighted microphone spectrum.
+  double dominant=r.oneK-r.overallZ;
+  if(r.clip){
+   new AlertDialog.Builder(this).setTitle("Invalid calibration recording")
+    .setMessage("Microphone signal clipped. Reduce input gain if possible and repeat measurement with a suitable calibrator.")
+    .setPositiveButton("OK",null).show();
+   return;
+  }
+  if(dominant< -6.0){
+   new AlertDialog.Builder(this).setTitle("1 kHz reference not detected")
+    .setMessage("The 1 kHz band is "+fmt(-dominant)+" dB below the unweighted overall level. A stable 1 kHz reference should dominate the measured sound. Calibration was not applied. Attach an acoustic calibrator and repeat the measurement.")
+    .setPositiveButton("OK",null).show();
+   return;
+  }
+  EditText input=new EditText(this);
+  input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  input.setSingleLine(true);
   input.setText("94.0");
-  LinearLayout wrap=col();wrap.setPadding(px(20),0,px(20),0);wrap.addView(input);
-  new AlertDialog.Builder(this).setTitle("1 kHz acoustic calibration")
-   .setMessage("Apply a known 1 kHz acoustic calibrator. Current unweighted 1 kHz level: "+fmt(r.oneK)+" dBFS. Enter reference dB SPL. Single-point calibration does not correct frequency-response errors.")
-   .setView(wrap).setPositiveButton("Apply",(dialog,which)->{
-    try{double ref=Double.parseDouble(input.getText().toString());
-     if(ref<40||ref>140)throw new NumberFormatException();
-     calibration=ref-r.oneK;getPreferences(MODE_PRIVATE).edit().putLong("offset",Double.doubleToLongBits(calibration)).apply();
-     refresh();toast("Calibration saved");
-    }catch(Exception ex){toast("Enter 40–140 dB SPL");}
-   }).setNeutralButton("Clear calibration",(dialog,which)->{
-    calibration=Double.NaN;getPreferences(MODE_PRIVATE).edit().remove("offset").apply();refresh();
+  CheckBox confirm=new CheckBox(this);
+  confirm.setText("I used a real acoustic calibrator physically coupled to the microphone at 1 kHz.");
+  confirm.setTextSize(14);
+  LinearLayout wrap=col();wrap.setPadding(px(18),px(5),px(18),px(2));
+  wrap.addView(txt("Reference sound pressure level (dB SPL):",14,WHITE,false));wrap.addView(input);
+  wrap.addView(confirm);
+  final double measuredOneK=r.oneK;
+  new AlertDialog.Builder(this).setTitle("Confirm acoustic calibration")
+   .setMessage("Unweighted 1 kHz measured band: "+fmt(measuredOneK)+" dBFS. "
+     +"A 94 dB field is NOT implied by selecting 94 in this dialog. "
+     +"Single-point calibration cannot correct microphone frequency response.")
+   .setView(wrap)
+   .setPositiveButton("Apply reference",(dialog,which)->{
+     if(!confirm.isChecked()){
+       toast("Calibration not applied: physical calibrator confirmation required.");
+       return;
+     }
+     try{
+       double reference=Double.parseDouble(input.getText().toString().trim());
+       if(reference<40||reference>140||!Double.isFinite(reference))throw new NumberFormatException();
+       calibration=reference-measuredOneK;
+       getPreferences(MODE_PRIVATE).edit()
+        .putLong("offset",Double.doubleToLongBits(calibration))
+        .putBoolean("offsetVerified",true).apply();
+       reset();refresh();
+       toast("Reference saved. Start a new measurement.");
+     }catch(Exception ex){toast("Enter a valid reference from 40 to 140 dB SPL.");}
    }).setNegativeButton("Cancel",null).show();
  }
+
  private void export(){
   OctaveAnalyzer.Result r;double[] l;int count;double overall;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();count=frames;overall=overallLeq;}
@@ -348,7 +416,8 @@ public final class MainActivity extends Activity {
   s.append("Number of frames,").append(count).append("\n");
   s.append("Overall live level,").append(fmt(withCal(r.overall))).append("\n");
   s.append("Overall Leq level,").append(fmt(withCal(overall))).append("\n");
-  s.append("Calibration status,").append(Double.isNaN(calibration)?"Uncalibrated dBFS":"1 kHz reference (indicative SPL)").append("\n");
+  s.append("Calibration status,").append(Double.isNaN(calibration)?"Uncalibrated dBFS":"1 kHz acoustic reference (indicative dB SPL)").append("\n");
+  if(!Double.isNaN(calibration))s.append("Calibration offset dB,").append(fmt(calibration)).append("\n");
   s.append("Note,This is FFT analysis and is not a certified sound-level meter.").append("\n");
   s.append("Center frequency Hz,Live level,Leq level\n");
   for(int i=0;i<r.live.length;i++){

@@ -9,8 +9,8 @@ public final class OctaveAnalyzer {
  public static final String[] THIRD={"31.5","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k"};
  public static final class Result {
   public final String[] names; public final double[] center,live;
-  public final double overall,oneK; public final boolean clip;
-  Result(String[] n,double[] c,double[] x,double o,double k,boolean cl){names=n;center=c;live=x;overall=o;oneK=k;clip=cl;}
+  public final double overall,oneK,overallZ; public final boolean clip;
+  Result(String[] n,double[] c,double[] x,double o,double k,double z,boolean cl){names=n;center=c;live=x;overall=o;oneK=k;overallZ=z;clip=cl;}
  }
  public static double db(double power){return 10*Math.log10(Math.max(1e-15,power));}
  public static double weight(double f,int type) {
@@ -34,7 +34,7 @@ public final class OctaveAnalyzer {
   avg/=N;
   for(int i=0;i<N;i++){double w=0.5*(1-Math.cos(2*Math.PI*i/(N-1)));re[i]=(s[i]/32768.0-avg)*w;ws+=w*w;}
   fft(re,im);
-  double total=0,oneK=0;
+  double total=0,oneK=0,totalZ=0;
   double kLo=1000/Math.pow(10,3.0/60),kHi=1000*Math.pow(10,3.0/60);
   for(int bin=1;bin<N/2;bin++){
    double f=(double)bin*sr/N;
@@ -42,11 +42,11 @@ public final class OctaveAnalyzer {
    double p=2*(re[bin]*re[bin]+im[bin]*im[bin])/(N*ws);
    if(f>=kLo&&f<kHi)oneK+=p;
    double wp=p*Math.pow(10,weight(f,weighting)/10.0);
-   if(f>=20)total+=wp;
+   if(f>=20){total+=wp;totalZ+=p;}
    for(int j=0;j<c.length;j++)if(f>=lo[j]&&f<hi[j])powers[j]+=wp;
   }
   double[] levels=new double[c.length];for(int j=0;j<c.length;j++)levels[j]=db(powers[j]);
-  return new Result(names,c,levels,db(total),db(oneK),clip);
+  return new Result(names,c,levels,db(total),db(oneK),db(totalZ),clip);
  }
  private static void fft(double[] re,double[] im){
   int n=re.length;
