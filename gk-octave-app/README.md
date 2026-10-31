@@ -1,14 +1,5 @@
-# GK Octave Sound Analyzer v1.4
-
-This is the single consolidated Android APK integrating all prior changes (v1.0–v1.3):
-- Built-in microphone, offline, real-time FFT based 1/1-octave and 1/3-octave plots and level tables.
-- A / C / Z frequency weighting; live level and cumulative Leq.
-- Measurement timer: unlimited, 10 / 30 / 60 seconds, 2 / 5 / 10 minutes or custom 1-3600 seconds. Automatic stop retains last result.
-- Save as CSV: measurement duration, weighting, band data, live and Leq, and clearly marked reference status.
-- Optional acoustic calibration from a real 1 kHz reference, with reset.
-- Optional estimated positive sound-level display WITHOUT external calibration: record at least 10 seconds in a quiet room with A weighting, then choose an assumed background dBA to derive a rough offset. Display and CSV explicitly label this as an estimate, never certified.
-- On-first-launch guidance to avoid confusing negative raw dBFS with wrong readings.
-- Dark-mode contrast fix for the inactive 1/1-octave button.
-- Developed By: Gaurav Kharva.
-
-**Accuracy limitation:** Raw dBFS is expected to be negative. Without an independent acoustic reference the app cannot know true dB SPL. The approximate mode is an assumption, not a measured absolute sound level, may have large errors, and is unsuitable for motor acceptance, IEC 61260/61672 tests, hearing safety or legal decisions.
+# GK Octave Analyzer — v1.5 (all prior changes consolidated)
+Android native, offline; microphone live FFT-based 1/1 and 1/3 octave displays, A/C/Z weighting; spectrum plots and Leq by band; timed measurements with auto-stop and custom duration, CSV export and user-selected output location; raw dBFS or optional assumed-background estimated dB SPL, physical 1 kHz reference calibration, reset.
+**What's new**: Obvious no-equipment button, guided 10-second quiet-room baseline with automatic timer, A weighting selection, assumption-choice dialog, first launch explanation, a display-range warning for low frequency estimates, raw digital values alongside displayed values in CSV.
+**Critical**: No-equipment estimates are NOT measured absolute sound pressure. The user assumes a quiet-room dBA reference; error can be very large. Raw dBFS values normally are negative. NOT suitable for motor acoustic acceptance, hearing safety, or IEC 61260-1/61672 certified testing.
+Developed By: Gaurav Kharva.

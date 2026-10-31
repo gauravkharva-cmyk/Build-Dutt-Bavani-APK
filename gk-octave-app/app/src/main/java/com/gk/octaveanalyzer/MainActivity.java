@@ -28,6 +28,8 @@ public final class MainActivity extends Activity {
  private volatile int durationSeconds=60;
  private volatile long measurementStartMs=0;
  private volatile boolean autoStopped=false;
+ private volatile boolean guidedCapture=false;
+ private int savedDuration=60;
  private int rate=48000,frames=0;
  private volatile AudioRecord audio;
  private Thread worker;
@@ -37,7 +39,8 @@ public final class MainActivity extends Activity {
  private int levelMode=0; // 0=raw dBFS, 1=assumed ambient estimate, 2=physical calibration
  private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge;
  private SpectrumView chart;private LinearLayout table;
- private Button start,one,third,calButton,saveButton;
+ private Button start,one,third,calButton,saveButton,estimateButton;
+ private Spinner weightingPicker;
  private String pendingCsv;
  private String source="not started";
 
@@ -60,13 +63,12 @@ public final class MainActivity extends Activity {
   if(levelMode==1&&!Double.isFinite(estimateOffset))levelMode=0;
   if(levelMode==2&&!Double.isFinite(calibration))levelMode=0;
   ui();reset();refresh();
-  if(!getPreferences(MODE_PRIVATE).getBoolean("v14IntroShown",false)){
-    getPreferences(MODE_PRIVATE).edit().putBoolean("v14IntroShown",true).apply();
-    new AlertDialog.Builder(this)
-      .setTitle("Choose how levels are displayed")
-      .setMessage("Raw audio levels use dBFS and are normally NEGATIVE. If you have no acoustic calibrator, you may make a rough positive SPL ESTIMATE by recording a quiet-room baseline for 10–20 seconds, then selecting an ASSUMED background level. The estimate is not a calibrated measurement.")
-      .setPositiveButton("Show estimate instructions",(dialog,which)->showEstimateInstructions())
-      .setNegativeButton("Use raw dBFS",null).show();
+  if(!getPreferences(MODE_PRIVATE).getBoolean("v15WelcomeSeen",false)){
+   getPreferences(MODE_PRIVATE).edit().putBoolean("v15WelcomeSeen",true).apply();
+   new AlertDialog.Builder(this).setTitle("Select a sound level mode")
+    .setMessage("Without external calibration, raw digital microphone readings (dBFS) are naturally NEGATIVE.\n\nChoose guided ESTIMATED dB SPL to record a quiet-room baseline, then assume a room level. The resulting positive readings are NOT verified sound pressure measurements.")
+    .setPositiveButton("Set up estimated dB",(dialog,which)->startGuidedEstimate())
+    .setNegativeButton("Keep raw dBFS",null).show();
   }
  }
  private int px(float d){return (int)(d*getResources().getDisplayMetrics().density+0.5f);}
@@ -101,7 +103,10 @@ public final class MainActivity extends Activity {
   content.addView(txt("Octave Sound Analyzer",26,WHITE,true),lp(-1,-2,4));
   content.addView(txt("Live mobile microphone  •  1/1 & 1/3 octave",13,GREY,false),lp(-1,-2,5));
   durationBadge=txt("",13,GREEN,true);
-  content.addView(durationBadge,lp(-1,-2,14));
+  content.addView(durationBadge,lp(-1,-2,6));
+  estimateButton=btn("SET UP ESTIMATED POSITIVE dB",Color.rgb(252,206,113));
+  estimateButton.setOnClickListener(v->startGuidedEstimate());
+  content.addView(estimateButton,lp(-1,px(47),12));
   LinearLayout panel=col();panel.setPadding(px(17),px(15),px(17),px(14));
   panel.setBackground(bg(PANEL));content.addView(panel,lp(-1,-2,14));
   status=txt("Ready",13,GREEN,true);panel.addView(status,lp(-1,-2,6));
@@ -119,12 +124,12 @@ public final class MainActivity extends Activity {
   modes.addView(one,p1);modes.addView(third,new LinearLayout.LayoutParams(0,-1,1));
   one.setOnClickListener(v->setMode(1));third.setOnClickListener(v->setMode(3));
   content.addView(txt("FREQUENCY WEIGHTING",12,GREY,true),lp(-1,-2,5));
-  Spinner choice=new Spinner(this);
+  weightingPicker=new Spinner(this);
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
     new String[]{"Z — unweighted","A weighting","C weighting"});
   adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-  choice.setAdapter(adapter);content.addView(choice,lp(-1,px(48),12));
-  choice.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+  weightingPicker.setAdapter(adapter);content.addView(weightingPicker,lp(-1,px(48),12));
+  weightingPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
    public void onNothingSelected(android.widget.AdapterView<?> parent){}
    public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id){
     if(weighting!=position){weighting=position;reset();refresh();}
@@ -145,7 +150,7 @@ public final class MainActivity extends Activity {
   content.addView(txt("BAND LEVELS (Hz / LIVE / Leq)",12,GREY,true),lp(-1,-2,7));
   table=col();table.setBackground(bg(PANEL));table.setPadding(px(12),px(10),px(12),px(10));
   content.addView(table,lp(-1,-2,12));makeTable();
-  content.addView(txt("Raw dBFS is normally negative. Positive levels shown in Estimated mode rely ONLY on an ASSUMED background level, and may have large errors. Never use this uncalibrated mode for motor noise acceptance, hearing safety or IEC compliance.",12,GREY,false),lp(-1,-2,13));
+  content.addView(txt("Estimated levels rely on an ASSUMED room sound level and are not calibrated dB SPL. Very quiet frequency bands below the assumed display range are marked BELOW ESTIMATE RANGE, rather than showing misleading positive numbers. Never use for industrial motor acceptance, hearing protection, or IEC compliance.",12,GREY,false),lp(-1,-2,13));
   TextView credit=txt("Developed By: Gaurav Kharva",12,GREY,true);
   credit.setGravity(Gravity.END);content.addView(credit);
  }
@@ -178,6 +183,10 @@ public final class MainActivity extends Activity {
  private double activeOffset(){return levelMode==1?estimateOffset:levelMode==2?calibration:0.0;}
  private String levelUnits(){return levelMode==1?"estimated dB SPL (UNVERIFIED)":levelMode==2?"dB SPL (1 kHz reference)":"dBFS (raw)";}
  private double withCal(double d){return d+activeOffset();}
+ private String shown(double raw){
+  double v=withCal(raw);
+  return levelMode==1&&v<0.0?"below est. range":fmt(v);
+ }
  private double[] offset(double[] a){
   if(a==null)return null;double[] r=a.clone();
   for(int i=0;i<r.length;i++)r[i]+=activeOffset();
@@ -188,7 +197,7 @@ public final class MainActivity extends Activity {
   OctaveAnalyzer.Result r;double[] l;double sum;int count;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
   boolean c=levelMode!=0;
-  status.setText(recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
+  status.setText(guidedCapture?"● QUIET-ROOM BASELINE (10 SECONDS)":recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
   if(calibrationBadge!=null){
    calibrationBadge.setText(levelMode==1
@@ -197,9 +206,9 @@ public final class MainActivity extends Activity {
      :"RAW dBFS – negative values are normal");
    calibrationBadge.setTextColor(levelMode==2?GREEN:Color.rgb(252,206,113));
   }
-  level.setText(r==null?"--.-":fmt(withCal(r.overall)));
+  level.setText(r==null?"--.-":shown(r.overall));
   units.setText(levelUnits()+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
-  average.setText(r==null?"Leq: --.-":"Leq: "+fmt(withCal(sum))+(levelMode==0?" dBFS":levelMode==1?" est. dB SPL":" dB SPL"));
+  average.setText(r==null?"Leq: --.-":"Leq: "+shown(sum)+(levelMode==0?" dBFS":levelMode==1?" est. dB SPL":" dB SPL"));
   long measuredSec=Math.round((double)count*OctaveAnalyzer.N/rate);
   details.setText(String.format(Locale.US,"Time %02d:%02d   •   %d Hz   •   %s",
     measuredSec/60,measuredSec%60,rate,source));
@@ -210,11 +219,13 @@ public final class MainActivity extends Activity {
   if(table.getChildCount()>1){
    for(int i=0;i<table.getChildCount()-1;i++){
     LinearLayout row=(LinearLayout)table.getChildAt(i+1);
-    ((TextView)row.getChildAt(1)).setText(r==null?"--":fmt(withCal(r.live[i])));
-    ((TextView)row.getChildAt(2)).setText(l==null?"--":fmt(withCal(l[i])));
+    ((TextView)row.getChildAt(1)).setText(r==null?"--":shown(r.live[i]));
+    ((TextView)row.getChildAt(2)).setText(l==null?"--":shown(l[i]));
    }
   }
   calButton.setEnabled(true);saveButton.setEnabled(r!=null);
+  estimateButton.setText(levelMode==1?"ESTIMATED dB ON  •  change assumed reference":"SET UP ESTIMATED POSITIVE dB");
+  estimateButton.setEnabled(!recording);
   start.setText(recording?"Stop measuring":"Start measuring");
   start.setBackground(bg(recording?Color.rgb(255,146,124):GREEN));
  }
@@ -283,9 +294,14 @@ public final class MainActivity extends Activity {
     if(durationSeconds>0 && SystemClock.elapsedRealtime()-measurementStartMs>=(long)durationSeconds*1000L){
      runOnUiThread(()->{
       if(recording){
+       boolean wasGuided=guidedCapture;
        autoStopped=true;
        stop();
-       toast("Measurement time completed. Select Save CSV to save the results.");
+       if(wasGuided){
+         estimateFromRoom();
+       }else{
+         toast("Measurement time completed. Select Save CSV to save the results.");
+       }
       }
      });
      break;
@@ -299,7 +315,9 @@ public final class MainActivity extends Activity {
   }
  }
  private void stop(){
-  recording=false;AudioRecord m=audio;
+  recording=false;
+  if(guidedCapture){guidedCapture=false;durationSeconds=savedDuration;}
+  AudioRecord m=audio;
   if(m!=null)try{m.stop();}catch(Exception ignored){}
   getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);refresh();
  }
@@ -353,6 +371,20 @@ public final class MainActivity extends Activity {
   popup.show();
  }
 
+ private void startGuidedEstimate(){
+  if(recording){toast("Stop the current measurement first");return;}
+  new AlertDialog.Builder(this).setTitle("10-second baseline • no equipment")
+   .setMessage("Place the tablet in a quiet room and do not talk or touch it during the 10-second recording. Afterward choose the background dBA you ASSUME was present (e.g. 40 dBA).\n\nAbsolute sound pressure is not known. This only produces an ESTIMATE; values can differ greatly from reality.")
+   .setPositiveButton("START 10-SECOND BASELINE",(dialog,which)->{
+     savedDuration=durationSeconds;
+     durationSeconds=10;
+     guidedCapture=true;
+     weighting=1;
+     weightingPicker.setSelection(1);
+     begin();
+     if(!recording){guidedCapture=false;durationSeconds=savedDuration;refresh();}
+   }).setNegativeButton("Cancel",null).show();
+ }
  private void showEstimateInstructions(){
   new AlertDialog.Builder(this).setTitle("Estimate without equipment")
     .setMessage("1. Select A weighting.\n2. Start measuring in a quiet room.\n3. Measure for at least 10–20 seconds.\n4. Stop measuring.\n5. Tap Estimate dB / Raw dBFS and select the quiet-room estimate option.\n6. Choose the ASSUMED room level.\n7. Start a new measurement.\n\nThis estimate is not a calibrated dB SPL measurement.")
@@ -397,7 +429,7 @@ public final class MainActivity extends Activity {
   int count;double baseline;boolean clipping;
   synchronized(lock){count=frames;baseline=overallLeq;clipping=last!=null&&last.clip;}
   double sec=count*(double)OctaveAnalyzer.N/rate;
-  if(sec<10 || !Double.isFinite(baseline)){
+  if(sec<9.5 || !Double.isFinite(baseline)){
    new AlertDialog.Builder(this).setTitle("Record quiet-room baseline")
      .setMessage("Only "+fmt(sec)+" seconds are available. In a quiet room with no speech, record 10–20 seconds of ambient sound with A weighting selected. Stop, then tap Estimate dB / Raw dBFS again. This is not a calibrated measurement.")
      .setPositiveButton("OK",null).show();
@@ -533,9 +565,9 @@ public final class MainActivity extends Activity {
   if(levelMode==1){s.append("Assumed room level dBA,").append(fmt(assumedDBA)).append("\n");s.append("Unverified dB offset,").append(fmt(estimateOffset)).append("\n");}
   if(levelMode==2)s.append("Physical calibration offset dB,").append(fmt(calibration)).append("\n");
   s.append("Note,Estimated SPL values depend on an assumed background sound level and may be very inaccurate. Not suitable for compliance.").append("\n");
-  s.append("Center frequency Hz,Live level,Leq level\n");
+  s.append("Center frequency Hz,Displayed live level,Displayed Leq level,Raw live dBFS,Raw Leq dBFS\n");
   for(int i=0;i<r.live.length;i++){
-   s.append(String.format(Locale.US,"%.3f,%.2f,%.2f\n",r.center[i],withCal(r.live[i]),withCal(l[i])));
+   s.append(String.format(Locale.US,"%.3f,%s,%s,%.2f,%.2f\n",r.center[i],shown(r.live[i]),shown(l[i]),r.live[i],l[i]));
   }
   pendingCsv=s.toString();
   Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("text/csv");save.addCategory(Intent.CATEGORY_OPENABLE);
