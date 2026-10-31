@@ -60,6 +60,14 @@ public final class MainActivity extends Activity {
   if(levelMode==1&&!Double.isFinite(estimateOffset))levelMode=0;
   if(levelMode==2&&!Double.isFinite(calibration))levelMode=0;
   ui();reset();refresh();
+  if(!getPreferences(MODE_PRIVATE).getBoolean("v14IntroShown",false)){
+    getPreferences(MODE_PRIVATE).edit().putBoolean("v14IntroShown",true).apply();
+    new AlertDialog.Builder(this)
+      .setTitle("Choose how levels are displayed")
+      .setMessage("Raw audio levels use dBFS and are normally NEGATIVE. If you have no acoustic calibrator, you may make a rough positive SPL ESTIMATE by recording a quiet-room baseline for 10–20 seconds, then selecting an ASSUMED background level. The estimate is not a calibrated measurement.")
+      .setPositiveButton("Show estimate instructions",(dialog,which)->showEstimateInstructions())
+      .setNegativeButton("Use raw dBFS",null).show();
+  }
  }
  private int px(float d){return (int)(d*getResources().getDisplayMetrics().density+0.5f);}
  private LinearLayout col(){LinearLayout x=new LinearLayout(this);x.setOrientation(1);return x;}
@@ -105,7 +113,8 @@ public final class MainActivity extends Activity {
   warning=txt("",12,Color.rgb(255,134,128),true);panel.addView(warning);
   content.addView(txt("BAND WIDTH",12,GREY,true),lp(-1,-2,7));
   LinearLayout modes=row();content.addView(modes,lp(-1,px(48),14));
-  one=btn("1/1 Octave",PANEL);third=btn("1/3 Octave",GREEN);
+  one=btn("1/1 Octave",PANEL);one.setTextColor(WHITE);
+  third=btn("1/3 Octave",GREEN);
   LinearLayout.LayoutParams p1=new LinearLayout.LayoutParams(0,-1,1);p1.rightMargin=px(8);
   modes.addView(one,p1);modes.addView(third,new LinearLayout.LayoutParams(0,-1,1));
   one.setOnClickListener(v->setMode(1));third.setOnClickListener(v->setMode(3));
@@ -124,7 +133,7 @@ public final class MainActivity extends Activity {
   start=btn("Start measuring",GREEN);content.addView(start,lp(-1,px(51),11));
   start.setOnClickListener(v->{if(recording)stop();else begin();});
   LinearLayout actions=row();content.addView(actions,lp(-1,px(48),14));
-  calButton=btn("Level / Estimate",Color.rgb(129,185,237));
+  calButton=btn("Estimate dB / Raw dBFS",Color.rgb(129,185,237));
   saveButton=btn("Save CSV",Color.rgb(252,206,113));
   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);left.rightMargin=px(8);
   actions.addView(calButton,left);actions.addView(saveButton,new LinearLayout.LayoutParams(0,-1,1));
@@ -333,6 +342,7 @@ public final class MainActivity extends Activity {
   popup.getMenu().add("Time for measurement  •  "+durationLabel()).setOnMenuItemClickListener(item->{chooseDuration();return true;});
   popup.getMenu().add("Save readings to CSV").setOnMenuItemClickListener(item->{export();return true;});
   popup.getMenu().add("Display mode / No-equipment estimate").setOnMenuItemClickListener(item->{showLevelModes();return true;});
+  popup.getMenu().add("Instructions: estimated dB").setOnMenuItemClickListener(item->{showEstimateInstructions();return true;});
   popup.getMenu().add("Estimate from assumed quiet room").setOnMenuItemClickListener(item->{estimateFromRoom();return true;});
   popup.getMenu().add("Physical calibration").setOnMenuItemClickListener(item->{calibrate();return true;});
   popup.getMenu().add("Clear calibration (dBFS mode)").setOnMenuItemClickListener(item->{resetCalibration();return true;});
@@ -343,6 +353,11 @@ public final class MainActivity extends Activity {
   popup.show();
  }
 
+ private void showEstimateInstructions(){
+  new AlertDialog.Builder(this).setTitle("Estimate without equipment")
+    .setMessage("1. Select A weighting.\n2. Start measuring in a quiet room.\n3. Measure for at least 10–20 seconds.\n4. Stop measuring.\n5. Tap Estimate dB / Raw dBFS and select the quiet-room estimate option.\n6. Choose the ASSUMED room level.\n7. Start a new measurement.\n\nThis estimate is not a calibrated dB SPL measurement.")
+    .setPositiveButton("OK",null).show();
+ }
  private void showLevelModes(){
   String[] modes={"Use raw dBFS (no assumptions)","Estimate positive dB from quiet-room assumption",
                   "Reuse stored approximate estimate","Physical 1 kHz calibration",
@@ -382,9 +397,9 @@ public final class MainActivity extends Activity {
   int count;double baseline;boolean clipping;
   synchronized(lock){count=frames;baseline=overallLeq;clipping=last!=null&&last.clip;}
   double sec=count*(double)OctaveAnalyzer.N/rate;
-  if(sec<8 || !Double.isFinite(baseline)){
+  if(sec<10 || !Double.isFinite(baseline)){
    new AlertDialog.Builder(this).setTitle("Record quiet-room baseline")
-     .setMessage("In a quiet room with no speech, record 10–20 seconds of ambient sound with A weighting selected. Stop measurement, then tap Level / Estimate again. Nothing will be claimed calibrated.")
+     .setMessage("Only "+fmt(sec)+" seconds are available. In a quiet room with no speech, record 10–20 seconds of ambient sound with A weighting selected. Stop, then tap Estimate dB / Raw dBFS again. This is not a calibrated measurement.")
      .setPositiveButton("OK",null).show();
    return;
   }
