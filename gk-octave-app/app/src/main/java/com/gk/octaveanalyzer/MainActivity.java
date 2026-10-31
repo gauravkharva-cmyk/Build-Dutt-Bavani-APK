@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.*;
 import android.media.audiofx.*;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.InputType;
 import android.view.*;
 import android.widget.*;
@@ -24,12 +25,15 @@ public final class MainActivity extends Activity {
  private static final int GREEN=Color.rgb(72,223,186),WHITE=Color.rgb(233,241,249),GREY=Color.rgb(170,188,203);
  private volatile boolean recording=false;
  private volatile int mode=3,weighting=0;
+ private volatile int durationSeconds=60;
+ private volatile long measurementStartMs=0;
+ private volatile boolean autoStopped=false;
  private int rate=48000,frames=0;
  private volatile AudioRecord audio;
  private Thread worker;
  private OctaveAnalyzer.Result last;
  private double[] sumP,leq; private double overallP=0,overallLeq=OctaveAnalyzer.FLOOR,calibration=Double.NaN;
- private TextView status,level,units,average,details,warning;
+ private TextView status,level,units,average,details,warning,durationBadge;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton;
  private String pendingCsv;
@@ -39,6 +43,7 @@ public final class MainActivity extends Activity {
   super.onCreate(state);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
   long bits=getPreferences(MODE_PRIVATE).getLong("offset",Double.doubleToLongBits(Double.NaN));
   calibration=Double.longBitsToDouble(bits);
+  durationSeconds=getPreferences(MODE_PRIVATE).getInt("durationSeconds",60);
   ui();reset();refresh();
  }
  private int px(float d){return (int)(d*getResources().getDisplayMetrics().density+0.5f);}
@@ -60,9 +65,20 @@ public final class MainActivity extends Activity {
   ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);
   LinearLayout content=col();content.setPadding(px(16),px(16),px(16),px(24));
   scroll.addView(content);setContentView(scroll);
-  content.addView(txt("GK  /  ACOUSTICS LAB",12,GREEN,true),lp(-1,-2,6));
+  LinearLayout top=row();
+  TextView brand=txt("GK  /  ACOUSTICS LAB",12,GREEN,true);
+  top.addView(brand,new LinearLayout.LayoutParams(0,px(46),1));
+  brand.setGravity(Gravity.CENTER_VERTICAL);
+  Button menuButton=btn("⋮",PANEL);
+  menuButton.setTextSize(24);menuButton.setTextColor(WHITE);
+  menuButton.setContentDescription("Options: measurement time, save CSV, calibration");
+  top.addView(menuButton,new LinearLayout.LayoutParams(px(52),px(44)));
+  menuButton.setOnClickListener(v->showOptions(menuButton));
+  content.addView(top,lp(-1,px(50),3));
   content.addView(txt("Octave Sound Analyzer",26,WHITE,true),lp(-1,-2,4));
-  content.addView(txt("Live mobile microphone  •  1/1 & 1/3 octave",13,GREY,false),lp(-1,-2,15));
+  content.addView(txt("Live mobile microphone  •  1/1 & 1/3 octave",13,GREY,false),lp(-1,-2,5));
+  durationBadge=txt("",13,GREEN,true);
+  content.addView(durationBadge,lp(-1,-2,14));
   LinearLayout panel=col();panel.setPadding(px(17),px(15),px(17),px(14));
   panel.setBackground(bg(PANEL));content.addView(panel,lp(-1,-2,14));
   status=txt("Ready",13,GREEN,true);panel.addView(status,lp(-1,-2,6));
@@ -93,7 +109,7 @@ public final class MainActivity extends Activity {
   start.setOnClickListener(v->{if(recording)stop();else begin();});
   LinearLayout actions=row();content.addView(actions,lp(-1,px(48),14));
   calButton=btn("Calibrate 1 kHz",Color.rgb(129,185,237));
-  saveButton=btn("Export CSV",Color.rgb(252,206,113));
+  saveButton=btn("Save CSV",Color.rgb(252,206,113));
   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);left.rightMargin=px(8);
   actions.addView(calButton,left);actions.addView(saveButton,new LinearLayout.LayoutParams(0,-1,1));
   calButton.setOnClickListener(v->calibrate());saveButton.setOnClickListener(v->export());
@@ -104,7 +120,7 @@ public final class MainActivity extends Activity {
   content.addView(txt("BAND LEVELS (Hz / LIVE / Leq)",12,GREY,true),lp(-1,-2,7));
   table=col();table.setBackground(bg(PANEL));table.setPadding(px(12),px(10),px(12),px(10));
   content.addView(table,lp(-1,-2,12));makeTable();
-  content.addView(txt("Indicative FFT spectral analysis only, NOT an IEC 61260-1 Class 1/2 or IEC 61672 compliant meter. Microphone response and device gain processing may affect readings. Calibrate for approximate dB SPL; use certified equipment for formal testing.",12,GREY,false),lp(-1,-2,13));
+  content.addView(txt("Negative values are expected in dBFS. Calibrate with a known 1 kHz acoustic reference for approximate positive dB SPL readings. This FFT analyzer is not IEC 61260-1 Class 1/2 or IEC 61672 certified. Use certified equipment for formal testing.",12,GREY,false),lp(-1,-2,13));
   TextView credit=txt("Developed By: Gaurav Kharva",12,GREY,true);
   credit.setGravity(Gravity.END);content.addView(credit);
  }
@@ -129,6 +145,7 @@ public final class MainActivity extends Activity {
   makeTable();reset();refresh();
  }
  private void reset(){
+  autoStopped=false;
   synchronized(lock){frames=0;sumP=null;leq=null;overallP=0;overallLeq=OctaveAnalyzer.FLOOR;last=null;}
   if(chart!=null)chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,null,null,!Double.isNaN(calibration));
  }
@@ -144,13 +161,16 @@ public final class MainActivity extends Activity {
   OctaveAnalyzer.Result r;double[] l;double sum;int count;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
   boolean c=!Double.isNaN(calibration);
-  status.setText(recording?"● LIVE MEASUREMENT":"● Ready / stopped");
+  status.setText(recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
   level.setText(r==null?"--.-":fmt(withCal(r.overall)));
   units.setText((c?"dB SPL (1 kHz calibrated)":"dBFS (uncalibrated)")+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
   average.setText(r==null?"Leq: --.-":"Leq: "+fmt(withCal(sum))+(c?" dB SPL":" dBFS"));
+  long measuredSec=Math.round((double)count*OctaveAnalyzer.N/rate);
   details.setText(String.format(Locale.US,"Time %02d:%02d   •   %d Hz   •   %s",
-    (long)count*OctaveAnalyzer.N/rate/60,(long)count*OctaveAnalyzer.N/rate%60,rate,source));
+    measuredSec/60,measuredSec%60,rate,source));
+  if(durationBadge!=null)durationBadge.setText("Measurement time: "+durationLabel()
+    +(recording&&durationSeconds>0?"  •  remaining "+Math.max(0,(durationSeconds*1000L-(SystemClock.elapsedRealtime()-measurementStartMs)+999)/1000)+" sec":""));
   warning.setText(r!=null&&r.clip?"⚠ Mic clipping: levels may be inaccurate":"");
   chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,r==null?null:offset(r.live),offset(l),c);
   if(table.getChildCount()>1){
@@ -190,7 +210,8 @@ public final class MainActivity extends Activity {
    reset();disableAudioEffects(mic.getAudioSessionId());
    mic.startRecording();
    if(mic.getRecordingState()!=AudioRecord.RECORDSTATE_RECORDING)throw new IllegalStateException("Microphone did not start");
-   audio=mic;recording=true;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+   audio=mic;autoStopped=false;measurementStartMs=SystemClock.elapsedRealtime();
+    recording=true;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
    final AudioRecord use=mic;
    worker=new Thread(()->capture(use),"gk-octave-capture");worker.start();refresh();
   }catch(Exception ex){
@@ -225,6 +246,16 @@ public final class MainActivity extends Activity {
      overallP+=Math.pow(10,r.overall/10);overallLeq=OctaveAnalyzer.db(overallP/frames);last=r;
     }
     runOnUiThread(()->{if(recording)refresh();});
+    if(durationSeconds>0 && SystemClock.elapsedRealtime()-measurementStartMs>=(long)durationSeconds*1000L){
+     runOnUiThread(()->{
+      if(recording){
+       autoStopped=true;
+       stop();
+       toast("Measurement time completed. Select Save CSV to save the results.");
+      }
+     });
+     break;
+    }
    }
   }catch(Exception ex){if(recording)runOnUiThread(()->toast("Recording stopped: "+ex.getMessage()));}
   finally{
@@ -237,6 +268,51 @@ public final class MainActivity extends Activity {
   recording=false;AudioRecord m=audio;
   if(m!=null)try{m.stop();}catch(Exception ignored){}
   getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);refresh();
+ }
+ private String durationLabel(){
+  if(durationSeconds==0)return "Unlimited";
+  if(durationSeconds%60==0)return (durationSeconds/60)+" min";
+  return durationSeconds+" sec";
+ }
+ private void setDuration(int seconds){
+  if(recording){toast("Stop measuring before changing time");return;}
+  durationSeconds=seconds;
+  getPreferences(MODE_PRIVATE).edit().putInt("durationSeconds",durationSeconds).apply();
+  refresh();
+ }
+ private void chooseDuration(){
+  if(recording){toast("Stop measuring to set measurement time");return;}
+  String[] times={"Unlimited (manual stop)","10 seconds","30 seconds","60 seconds","2 minutes","5 minutes","10 minutes","Custom seconds…"};
+  int[] seconds={0,10,30,60,120,300,600,-1};
+  new AlertDialog.Builder(this).setTitle("Time for measurement")
+   .setItems(times,(dialog,which)->{
+     if(which==seconds.length-1){
+      EditText value=new EditText(this);
+      value.setInputType(InputType.TYPE_CLASS_NUMBER);
+      value.setSingleLine(true);
+      value.setHint("Example: 45");
+      LinearLayout wrap=col();wrap.setPadding(px(22),px(8),px(22),0);wrap.addView(value);
+      new AlertDialog.Builder(this).setTitle("Custom measurement duration")
+        .setMessage("Enter measurement time in seconds (1–3600)")
+        .setView(wrap).setPositiveButton("Set",(d,w)->{
+           try{int sec=Integer.parseInt(value.getText().toString().trim());
+            if(sec<1||sec>3600)throw new NumberFormatException();
+            setDuration(sec);
+           }catch(Exception ex){toast("Enter a duration from 1 to 3600 seconds");}
+        }).setNegativeButton("Cancel",null).show();
+     }else setDuration(seconds[which]);
+   }).setNegativeButton("Cancel",null).show();
+ }
+ private void showOptions(View anchor){
+  PopupMenu popup=new PopupMenu(this,anchor);
+  popup.getMenu().add("Time for measurement  •  "+durationLabel()).setOnMenuItemClickListener(item->{chooseDuration();return true;});
+  popup.getMenu().add("Save readings to CSV").setOnMenuItemClickListener(item->{export();return true;});
+  popup.getMenu().add("Calibrate 1 kHz microphone").setOnMenuItemClickListener(item->{calibrate();return true;});
+  popup.getMenu().add("Clear current readings").setOnMenuItemClickListener(item->{
+    if(recording){toast("Stop measurement before clearing readings");return true;}
+    reset();refresh();return true;
+  });
+  popup.show();
  }
  private void calibrate(){
   OctaveAnalyzer.Result r;synchronized(lock){r=last;}
@@ -257,8 +333,8 @@ public final class MainActivity extends Activity {
    }).setNegativeButton("Cancel",null).show();
  }
  private void export(){
-  OctaveAnalyzer.Result r;double[] l;int count;
-  synchronized(lock){r=last;l=leq==null?null:leq.clone();count=frames;}
+  OctaveAnalyzer.Result r;double[] l;int count;double overall;
+  synchronized(lock){r=last;l=leq==null?null:leq.clone();count=frames;overall=overallLeq;}
   if(r==null){toast("Measure first");return;}
   StringBuilder s=new StringBuilder();
   s.append("GK Octave Analyzer,Indicative FFT spectrum\n");
@@ -267,7 +343,13 @@ public final class MainActivity extends Activity {
   s.append("Weighting,").append(new String[]{"Z","A","C"}[weighting]).append("\n");
   s.append("Sample rate (Hz),").append(rate).append("\n");
   s.append("Units,").append(Double.isNaN(calibration)?"dBFS":"dB SPL (1kHz calibrated)").append("\n");
+  s.append("Measurement time setting,").append(durationLabel()).append("\n");
+  s.append("Measured duration (seconds),").append(String.format(Locale.US,"%.2f",(double)count*OctaveAnalyzer.N/rate)).append("\n");
   s.append("Number of frames,").append(count).append("\n");
+  s.append("Overall live level,").append(fmt(withCal(r.overall))).append("\n");
+  s.append("Overall Leq level,").append(fmt(withCal(overall))).append("\n");
+  s.append("Calibration status,").append(Double.isNaN(calibration)?"Uncalibrated dBFS":"1 kHz reference (indicative SPL)").append("\n");
+  s.append("Note,This is FFT analysis and is not a certified sound-level meter.").append("\n");
   s.append("Center frequency Hz,Live level,Leq level\n");
   for(int i=0;i<r.live.length;i++){
    s.append(String.format(Locale.US,"%.3f,%.2f,%.2f\n",r.center[i],withCal(r.live[i]),withCal(l[i])));

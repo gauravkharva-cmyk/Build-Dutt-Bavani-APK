@@ -1,2 +1,1 @@
-# GK Octave Analyzer
-Offline Android app for indicative live 1/1 octave and 1/3 octave FFT analysis of microphone audio, showing A/C/Z weighting, per-band spectra, running Leq and CSV export. 1 kHz reference calibration is optional. Uncalibrated readings are dBFS, not dB SPL. Built-in microphones are not laboratory-grade. Not IEC 61260-1 or IEC 61672 certified. Developed By: Gaurav Kharva.
+GK Octave Analyzer v1.1 — 1/1 and 1/3 octave live analysis, A/C/Z weighting, session Leq, timed auto stop (10s,30s,60s,2m,5m,10m, custom 1-3600s or unlimited), Options menu, Save CSV via Android document picker, 1 kHz acoustic calibration. Negative dBFS values are normal until calibrated. Results not certified. Developed By: Gaurav Kharva.
