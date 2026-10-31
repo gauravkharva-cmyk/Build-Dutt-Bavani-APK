@@ -372,6 +372,10 @@ public final class MainActivity extends Activity {
  }
 
  private void startGuidedEstimate(){
+  if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+   requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},103);
+   return;
+  }
   if(recording){toast("Stop the current measurement first");return;}
   new AlertDialog.Builder(this).setTitle("10-second baseline • no equipment")
    .setMessage("Place the tablet in a quiet room and do not talk or touch it during the 10-second recording. Afterward choose the background dBA you ASSUME was present (e.g. 40 dBA).\n\nAbsolute sound pressure is not known. This only produces an ESTIMATE; values can differ greatly from reality.")
@@ -587,6 +591,8 @@ public final class MainActivity extends Activity {
   super.onRequestPermissionsResult(req,perms,results);
   if(req==101){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)begin();
    else toast("Microphone permission is required");}
+  if(req==103){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startGuidedEstimate();
+   else toast("Microphone permission is required for baseline measurement");}
  }
  @Override protected void onStop(){super.onStop();if(recording)stop();}
  @Override protected void onDestroy(){stop();super.onDestroy();}
