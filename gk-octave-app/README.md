@@ -1,4 +1,9 @@
-# GK Octave Analyzer v1.7
-Offline Android sound analyzer with 1/1 and 1/3 octave FFT, A/C/Z weighting, live graphs, cumulative Leq, timed auto-stop, CSV export, optional real 1 kHz calibration, optional assumed SPL estimate. Stable package identity and debug signing since v1.6.
-**Default display**: NONNEGATIVE RELATIVE DIGITAL SOUND LEVEL, in dB above a fixed -100 dBFS reference, with levels below reference rendered 0. **This is not dB SPL**. It is an arbitrary digital baseline for comparisons within the same device. To see raw negative dBFS, choose Level Mode > Raw. To try an assumed SPL estimate, use the guided quiet-room method. CSV includes display values and raw dBFS. This app is not certified for IEC 61260/61672 or industrial motor acceptance.
+# GK Octave Analyzer v1.8 — adjustable relative display
+
+Retains: offline Android built-in microphone capture, real-time 1/1 octave and 1/3 octave FFT analysis, A/C/Z weighting, live band graph + Leq, adjustable measurement duration and automatic stop, CSV export, raw dBFS, no-equipment assumed-room SPL mode, physical 1 kHz calibration.
+
+NEW: explicit user-controlled **relative display shift** in range -40 to +60 dB, +/-5 dB buttons, Set/Reset dialog, stored in app preferences. Adjustment affects relative-mode readout/Leq/band graph only, does not modify raw microphone measurements. CSV always stores raw dBFS alongside adjusted display and adjustment amount. Default adjustment 0 dB and default RELATIVE digital level. Sign remains nonnegative relative-level readings.
+
+**NOT a sound pressure meter**: the relative scale's 0 corresponds to -100 dBFS by convention; optional shift is arbitrary and does not make measurements accurate against real SPL. A valid comparison to measured reference requires proper acoustic instrumentation and microphone characterization. Do not use for motor acceptance tests, IEC certification, or hearing safety.
+
 Developed By: Gaurav Kharva.

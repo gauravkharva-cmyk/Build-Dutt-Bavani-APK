@@ -2,6 +2,6 @@ plugins { id 'com.android.application' }
 android {
  namespace 'com.gk.octaveanalyzer'
  compileSdk 35
- defaultConfig { applicationId 'com.gk.octaveanalyzer.stable'; minSdk 26; targetSdk 34; versionCode 8; versionName '1.7' }
+ defaultConfig { applicationId 'com.gk.octaveanalyzer.stable'; minSdk 26; targetSdk 34; versionCode 9; versionName '1.8' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }

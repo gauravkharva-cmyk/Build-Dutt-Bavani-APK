@@ -11,7 +11,7 @@ public final class SpectrumView extends View {
  @Override protected void onMeasure(int w,int h){setMeasuredDimension(Math.max(MeasureSpec.getSize(w),(int)dp(55+names.length*(names.length>12?34:50))),(int)dp(260));}
  @Override protected void onDraw(Canvas c){
   float left=dp(43),top=dp(19),bottom=getHeight()-dp(45),right=getWidth()-dp(15);
-  double min=scaleMode==3?0:scaleMode==0?-100:20,max=scaleMode==3?100:scaleMode==0?0:140;
+  double min=scaleMode==3?0:scaleMode==0?-100:20,max=scaleMode==3?150:scaleMode==0?0:140;
   p.setTextSize(dp(11));p.setTypeface(Typeface.DEFAULT);
   for(int j=0;j<=6;j++){
    double val=min+(max-min)*j/6.0;

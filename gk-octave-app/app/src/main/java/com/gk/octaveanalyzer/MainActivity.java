@@ -36,8 +36,10 @@ public final class MainActivity extends Activity {
  private OctaveAnalyzer.Result last;
  private double[] sumP,leq; private double overallP=0,overallLeq=OctaveAnalyzer.FLOOR,calibration=Double.NaN;
  private double estimateOffset=Double.NaN,assumedDBA=Double.NaN;
+ // User-controlled visual shift for RELATIVE mode only; NOT SPL calibration.
+ private double relativeAdjustment=0.0;
  private int levelMode=3; // 0=raw dBFS, 1=assumed SPL, 2=physical reference, 3=relative digital dB
- private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge;
+ private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge,relativeAdjustmentText;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton,estimateButton;
  private Spinner weightingPicker;
@@ -55,6 +57,10 @@ public final class MainActivity extends Activity {
    getPreferences(MODE_PRIVATE).edit().remove("offset").apply();
   }
   durationSeconds=getPreferences(MODE_PRIVATE).getInt("durationSeconds",60);
+  relativeAdjustment=Double.longBitsToDouble(getPreferences(MODE_PRIVATE)
+    .getLong("relativeAdjustment",Double.doubleToLongBits(0.0)));
+  if(!Double.isFinite(relativeAdjustment)||relativeAdjustment< -40||relativeAdjustment>60)
+    relativeAdjustment=0;
   if(getPreferences(MODE_PRIVATE).getBoolean("roughSet",false)){
    estimateOffset=Double.longBitsToDouble(getPreferences(MODE_PRIVATE).getLong("estimateOffset",Double.doubleToLongBits(Double.NaN)));
    assumedDBA=Double.longBitsToDouble(getPreferences(MODE_PRIVATE).getLong("assumedDBA",Double.doubleToLongBits(Double.NaN)));
@@ -122,6 +128,22 @@ public final class MainActivity extends Activity {
   average=txt("Leq: --.-",16,GREEN,true);panel.addView(average,lp(-1,-2,8));
   details=txt("Sample rate: --",12,GREY,false);panel.addView(details,lp(-1,-2,3));
   warning=txt("",12,Color.rgb(255,134,128),true);panel.addView(warning);
+  content.addView(txt("ADJUST RELATIVE DISPLAY • NOT dB SPL",12,GREY,true),lp(-1,-2,6));
+  LinearLayout adjustmentBar=row();
+  Button less=btn("−5 dB",PANEL);less.setTextColor(WHITE);
+  Button more=btn("+5 dB",GREEN);
+  Button custom=btn("Set / Reset",Color.rgb(252,206,113));
+  LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,px(42),1);ap.rightMargin=px(7);
+  adjustmentBar.addView(less,ap);
+  LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,px(42),1);bp.rightMargin=px(7);
+  adjustmentBar.addView(more,bp);
+  adjustmentBar.addView(custom,new LinearLayout.LayoutParams(0,px(42),1.3f));
+  content.addView(adjustmentBar,lp(-1,px(44),5));
+  relativeAdjustmentText=txt("",12,Color.rgb(252,206,113),true);
+  content.addView(relativeAdjustmentText,lp(-1,-2,14));
+  less.setOnClickListener(v->changeRelativeAdjustment(relativeAdjustment-5));
+  more.setOnClickListener(v->changeRelativeAdjustment(relativeAdjustment+5));
+  custom.setOnClickListener(v->showRelativeAdjustmentDialog());
   content.addView(txt("BAND WIDTH",12,GREY,true),lp(-1,-2,7));
   LinearLayout modes=row();content.addView(modes,lp(-1,px(48),14));
   one=btn("1/1 Octave",PANEL);one.setTextColor(WHITE);
@@ -186,7 +208,7 @@ public final class MainActivity extends Activity {
   if(chart!=null)chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,null,null,levelMode);
  }
  private String fmt(double d){return String.format(Locale.US,"%.1f",d);}
- private double activeOffset(){return levelMode==1?estimateOffset:levelMode==2?calibration:levelMode==3?100.0:0.0;}
+ private double activeOffset(){return levelMode==1?estimateOffset:levelMode==2?calibration:levelMode==3?100.0+relativeAdjustment:0.0;}
  private String levelUnits(){return levelMode==3?"RELATIVE dB (ref -100 dBFS; NOT SPL)":levelMode==1?"estimated dB SPL (UNVERIFIED)":levelMode==2?"dB SPL (1 kHz reference)":"dBFS (raw)";}
  private double withCal(double d){return d+activeOffset();}
  private String shown(double raw){
@@ -195,7 +217,7 @@ public final class MainActivity extends Activity {
  }
  private double[] offset(double[] a){
   if(a==null)return null;double[] r=a.clone();
-  for(int i=0;i<r.length;i++)r[i]=levelMode==3?Math.max(0.0,r[i]+100.0):r[i]+activeOffset();
+  for(int i=0;i<r.length;i++)r[i]=levelMode==3?Math.max(0.0,r[i]+activeOffset()):r[i]+activeOffset();
   return r;
  }
  private void refresh(){
@@ -204,11 +226,16 @@ public final class MainActivity extends Activity {
   synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
   status.setText(guidedCapture?"● QUIET-ROOM BASELINE (10 SECONDS)":recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
+  if(relativeAdjustmentText!=null){
+    relativeAdjustmentText.setText(levelMode==3
+      ?"Relative adjustment: "+(relativeAdjustment>=0?"+":"")+fmt(relativeAdjustment)+" dB; manually adjusted—not calibrated"
+      :"Relative adjustment applies only in Relative mode");
+  }
   if(calibrationBadge!=null){
    calibrationBadge.setText(levelMode==1
      ?"ESTIMATE ONLY – assumed "+fmt(assumedDBA)+" dBA background; not calibrated"
      :levelMode==2?"PHYSICAL REFERENCE (indicative); offset "+fmt(calibration)+" dB"
-     :levelMode==3?"RELATIVE DIGITAL LEVEL • 0 dB = -100 dBFS • NOT SPL"
+     :levelMode==3?"RELATIVE DIGITAL LEVEL • Manual shift "+fmt(relativeAdjustment)+" dB • NOT SPL"
      :"RAW dBFS – negative values are normal");
    calibrationBadge.setTextColor(levelMode==2?GREEN:Color.rgb(252,206,113));
   }
@@ -361,9 +388,48 @@ public final class MainActivity extends Activity {
      }else setDuration(seconds[which]);
    }).setNegativeButton("Cancel",null).show();
  }
+ private void changeRelativeAdjustment(double amount){
+  if(levelMode!=3){
+   new AlertDialog.Builder(this).setTitle("Relative mode required")
+    .setMessage("This control shifts RELATIVE digital readings only. It does not adjust raw microphone data or calibrate dB SPL. Switch to relative display mode?")
+    .setPositiveButton("Use relative mode",(dialog,which)->{
+      if(recording){toast("Stop measuring before changing display modes");return;}
+      levelMode=3;storeLevelMode();changeRelativeAdjustment(amount);
+    }).setNegativeButton("Cancel",null).show();
+   return;
+  }
+  if(amount< -40||amount>60){toast("Adjustment range is -40 to +60 dB");return;}
+  relativeAdjustment=Math.rint(amount*10)/10;
+  getPreferences(MODE_PRIVATE).edit().putLong("relativeAdjustment",Double.doubleToLongBits(relativeAdjustment)).apply();
+  refresh();
+ }
+ private void showRelativeAdjustmentDialog(){
+  if(levelMode!=3){
+   toast("Choose RELATIVE mode in Level Mode first.");
+   return;
+  }
+  EditText input=new EditText(this);
+  input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_SIGNED|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  input.setText(String.format(Locale.US,"%.1f",relativeAdjustment));
+  input.setSingleLine(true);
+  LinearLayout wrap=col();wrap.setPadding(px(18),0,px(18),0);
+  wrap.addView(input);
+  new AlertDialog.Builder(this).setTitle("Manual relative-level adjustment")
+   .setMessage("Choose how much to shift the DISPLAY (-40 to +60 dB). This does NOT make it an actual dB SPL reading and does not change the underlying recorded data.")
+   .setView(wrap)
+   .setPositiveButton("Apply",(dialog,which)->{
+      try{
+        double delta=Double.parseDouble(input.getText().toString().trim());
+        if(!Double.isFinite(delta)||delta< -40||delta>60)throw new NumberFormatException();
+        changeRelativeAdjustment(delta);
+      }catch(Exception err){toast("Enter a value from -40 to +60");}
+   }).setNeutralButton("Reset to 0",(dialog,which)->changeRelativeAdjustment(0.0))
+   .setNegativeButton("Cancel",null).show();
+ }
  private void showOptions(View anchor){
   PopupMenu popup=new PopupMenu(this,anchor);
   popup.getMenu().add("Time for measurement  •  "+durationLabel()).setOnMenuItemClickListener(item->{chooseDuration();return true;});
+  popup.getMenu().add("Adjust relative display (NOT SPL)").setOnMenuItemClickListener(item->{showRelativeAdjustmentDialog();return true;});
   popup.getMenu().add("Save readings to CSV").setOnMenuItemClickListener(item->{export();return true;});
   popup.getMenu().add("Display mode: relative / raw / assumed SPL").setOnMenuItemClickListener(item->{showLevelModes();return true;});
   popup.getMenu().add("Instructions: estimated dB").setOnMenuItemClickListener(item->{showEstimateInstructions();return true;});
@@ -571,16 +637,21 @@ public final class MainActivity extends Activity {
   s.append("Weighting,").append(new String[]{"Z","A","C"}[weighting]).append("\n");
   s.append("Sample rate (Hz),").append(rate).append("\n");
   s.append("Units,").append(levelUnits()).append("\n");
-  if(levelMode==3)s.append("Relative reference,0 relative dB equals -100 dBFS. Values below reference shown as 0; NOT SPL.").append("\n");
+  if(levelMode==3){
+    s.append("Relative baseline,-100 dBFS (arbitrary). NOT dB SPL.").append("\n");
+    s.append("Manual relative display adjustment dB,").append(fmt(relativeAdjustment)).append("\n");
+  }
   s.append("Measurement time setting,").append(durationLabel()).append("\n");
   s.append("Measured duration (seconds),").append(String.format(Locale.US,"%.2f",(double)count*OctaveAnalyzer.N/rate)).append("\n");
   s.append("Number of frames,").append(count).append("\n");
-  s.append("Overall live level,").append(fmt(withCal(r.overall))).append("\n");
-  s.append("Overall Leq level,").append(fmt(withCal(overall))).append("\n");
+  s.append("Overall displayed live level,").append(shown(r.overall)).append("\n");
+  s.append("Overall displayed Leq,").append(shown(overall)).append("\n");
+  s.append("Overall raw live dBFS,").append(fmt(r.overall)).append("\n");
+  s.append("Overall raw Leq dBFS,").append(fmt(overall)).append("\n");
    s.append("Measurement reference,").append(levelMode==3?"Relative reference -100 dBFS (nonnegative, NOT SPL)":levelMode==1?"Assumed environment ONLY":levelMode==2?"Physical reference":"Uncalibrated raw audio").append("\n");
   if(levelMode==1){s.append("Assumed room level dBA,").append(fmt(assumedDBA)).append("\n");s.append("Unverified dB offset,").append(fmt(estimateOffset)).append("\n");}
   if(levelMode==2)s.append("Physical calibration offset dB,").append(fmt(calibration)).append("\n");
-  s.append("Note,Relative readings are NOT SPL. Assumed SPL depends on assumed ambient noise and can be wrong. Not suitable for compliance or motor acceptance.").append("\n");
+  s.append("Note,Relative adjustment changes displayed numbers ONLY; it does not establish real dB SPL or acoustic calibration. Not suitable for formal noise testing.").append("\n");
   s.append("Center frequency Hz,Displayed live level,Displayed Leq level,Raw live dBFS,Raw Leq dBFS\n");
   for(int i=0;i<r.live.length;i++){
    s.append(String.format(Locale.US,"%.3f,%s,%s,%.2f,%.2f\n",r.center[i],shown(r.live[i]),shown(l[i]),r.live[i],l[i]));
