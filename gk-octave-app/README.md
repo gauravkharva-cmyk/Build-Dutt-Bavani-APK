@@ -1,9 +1,13 @@
-# GK Octave Analyzer v1.8 — adjustable relative display
+# GK Octave Analyzer v1.9 — Android microphone factory-reference mode
 
-Retains: offline Android built-in microphone capture, real-time 1/1 octave and 1/3 octave FFT analysis, A/C/Z weighting, live band graph + Leq, adjustable measurement duration and automatic stop, CSV export, raw dBFS, no-equipment assumed-room SPL mode, physical 1 kHz calibration.
+- Built-in microphone, offline, FFT-based 1/1 and 1/3 octave analysis; A/C/Z weighting; cumulative Leq; timer with auto-stop; CSV export including raw dBFS data.
+- **No arbitrary offset or manually adjusted relative levels.** Previous manual modes automatically deactivated on upgrade.
+- Automatically requests the UNPROCESSED audio source ONLY if Android AudioManager declares it supported.
+- When a single active microphone provides `MicrophoneInfo.getSensitivity()` in dBFS at a 94 dB SPL 1 kHz tone, computes indicative SPL = measured dBFS + 94 - sensitivity.
+- If Android declares UNPROCESSED but no valid active sensitivity metadata is available, uses the Android Compatibility Definition nominal unprocessed 1 kHz 94 dB SPL signal level: PCM RMS=520/32768 = about -36 dBFS. Explicitly labels this as an Android nominal, **not device-verified calibration**. Manufacturer mic frequency response and gain remain error sources.
+- If the device does NOT declare UNPROCESSED, does **not** invent a positive SPL. Shows raw negative dBFS and tells the user why.
+- Microphone info diagnostics show routing, support and reference source; CSV records full provenance.
 
-NEW: explicit user-controlled **relative display shift** in range -40 to +60 dB, +/-5 dB buttons, Set/Reset dialog, stored in app preferences. Adjustment affects relative-mode readout/Leq/band graph only, does not modify raw microphone measurements. CSV always stores raw dBFS alongside adjusted display and adjustment amount. Default adjustment 0 dB and default RELATIVE digital level. Sign remains nonnegative relative-level readings.
-
-**NOT a sound pressure meter**: the relative scale's 0 corresponds to -100 dBFS by convention; optional shift is arbitrary and does not make measurements accurate against real SPL. A valid comparison to measured reference requires proper acoustic instrumentation and microphone characterization. Do not use for motor acceptance tests, IEC certification, or hearing safety.
+Neither an API nor an Android standard guarantees traceable acoustic measurement accuracy. This is NOT IEC 61260-1 or IEC 61672 certified and should not be used for industrial motor noise acceptance or hearing safety.
 
 Developed By: Gaurav Kharva.
