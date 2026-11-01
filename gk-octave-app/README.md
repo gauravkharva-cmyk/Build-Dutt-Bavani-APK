@@ -1,12 +1,11 @@
-# GK Motor Octave Noise Analyzer — v2.1
+# GK Motor Octave Noise Analyzer v2.2
 
-An engineering-oriented offline Android acoustic spectrum tool for electric motors. Based on v2.0. APK package com.gk.octaveanalyzer.stable.
+## High overall noise level diagnostic
+- The original app's default overall weighting was Z (no frequency weighting). The v2.2 default is A-weighting, the common electrical motor noise metric dB(A).
+- One capture calculates and displays broadband **A, C, Z Leq** simultaneously from the SAME FFT sample data and shows Z-A difference. Switching the octave weighting still works. No artificial acoustic adjustment is added.
+- CSV preserves A/C/Z broadband digital Leq, displayed values, weighting and other motor details.
+- Motor test inputs for RPM, frequency, load, mic distance, supply type and placement; background and motor-running recordings with tentative per-band energy subtraction; 1/1 and 1/3 octave analysis; timer and CSV.
+- `MIC` recording gain on this Lenovo tablet is not verified and may be processed, so these are *not guaranteed absolute SPL measurements*. The app never substitutes relative adjusted numbers for acoustically calibrated data. A valid comparison with a reference sound-level meter must use identical weighting, time integration, microphone distance/position and conditions.
+- The tool is not IEC 61260/61672 certified. Motor sound-power acceptance per IEC 60034-9 / ISO 3744 requires compliant equipment.
 
-- 1/1- and 1/3-octave analysis (FFT estimates), A/C/Z weighting, live and Leq, 10s-10min/custom timer and auto-stop, CSV export.
-- Motor test setup captures motor ID, RPM, supply frequency, drive type (direct/VFD), load %, microphone distance and measurement position.
-- Displays expected **shaft 1X, 2X and 2×electrical frequency** guidance from entered inputs; these are **not fault diagnoses**.
-- **Background capture with motor OFF** before measuring running motor, using identical band and weighting settings and microphone location. Running and background Leq shown per band, with *logarithmic energy subtraction* where motor–background difference is >3 dB. Values between 3–10 dB flagged uncertain; ≤3 dB flagged "BG high" (not separable).
-- CSV includes motor metadata, background and running Leq in raw dBFS, net motor band where separable, relative acoustic delta, and warnings.
-- Android MIC gain and DSP may vary between runs, invalidating background corrections. All uncalibrated dBFS data remains relative, and is NOT calibrated sound-pressure level dB SPL or sound-power level dB(A).
-- Real acceptance tests per IEC 60034-9:2021 and ISO 3744 require compliant acoustic instruments, suitable environments, mic measurement geometry and corrections. This app is **not IEC 61260-1 Class 1/2 or IEC 61672 certified**.
-- Developed By: Gaurav Kharva.
+Developed By: Gaurav Kharva.

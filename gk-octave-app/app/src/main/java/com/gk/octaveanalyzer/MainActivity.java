@@ -26,7 +26,7 @@ public final class MainActivity extends Activity {
  private static final int BG=Color.rgb(12,21,36),PANEL=Color.rgb(22,36,54);
  private static final int GREEN=Color.rgb(72,223,186),WHITE=Color.rgb(233,241,249),GREY=Color.rgb(170,188,203);
  private volatile boolean recording=false;
- private volatile int mode=3,weighting=0;
+ private volatile int mode=3,weighting=1; // default A for motor noise testing
  private volatile int durationSeconds=60;
  private volatile long measurementStartMs=0;
  private volatile boolean autoStopped=false;
@@ -41,6 +41,8 @@ public final class MainActivity extends Activity {
  private Thread worker;
  private OctaveAnalyzer.Result last;
  private double[] sumP,leq; private double overallP=0,overallLeq=OctaveAnalyzer.FLOOR,calibration=Double.NaN;
+ private double aPower=0,cPower=0,zPower=0;
+ private double aLeq=OctaveAnalyzer.FLOOR,cLeq=OctaveAnalyzer.FLOOR,zLeq=OctaveAnalyzer.FLOOR;
  private double estimateOffset=Double.NaN,assumedDBA=Double.NaN;
  // User-controlled visual shift for RELATIVE mode only; NOT SPL calibration.
  private double relativeAdjustment=0.0;
@@ -50,7 +52,7 @@ public final class MainActivity extends Activity {
  private boolean supportsUnprocessed=false; private int activeMicrophoneCount=0;
  private String factoryMessage="SPL reference not yet checked";
 
- private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge,relativeAdjustmentText;
+ private TextView status,level,units,average,weightedSummary,details,warning,durationBadge,calibrationBadge,relativeAdjustmentText;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton,estimateButton;
  private Spinner weightingPicker,supplyType;
@@ -197,6 +199,8 @@ public final class MainActivity extends Activity {
   units=txt("dBFS  •  uncalibrated",13,GREY,false);panel.addView(units,lp(-1,-2,4));
   calibrationBadge=txt("",13,Color.rgb(252,206,113),true);panel.addView(calibrationBadge,lp(-1,-2,9));
   average=txt("Leq: --.-",16,GREEN,true);panel.addView(average,lp(-1,-2,8));
+  weightedSummary=txt("Broadband Leq: A --  C --  Z --",13,Color.rgb(252,206,113),true);
+  panel.addView(weightedSummary,lp(-1,-2,7));
   details=txt("Sample rate: --",12,GREY,false);panel.addView(details,lp(-1,-2,3));
   warning=txt("",12,Color.rgb(255,134,128),true);panel.addView(warning);
   content.addView(txt("BAND WIDTH",12,GREY,true),lp(-1,-2,7));
@@ -211,7 +215,7 @@ public final class MainActivity extends Activity {
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
     new String[]{"Z — unweighted","A weighting","C weighting"});
   adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-  weightingPicker.setAdapter(adapter);content.addView(weightingPicker,lp(-1,px(48),12));
+  weightingPicker.setAdapter(adapter);weightingPicker.setSelection(1);content.addView(weightingPicker,lp(-1,px(48),12));
   weightingPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
    public void onNothingSelected(android.widget.AdapterView<?> parent){}
    public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id){
@@ -330,7 +334,11 @@ public final class MainActivity extends Activity {
  }
  private void reset(){
   autoStopped=false;
-  synchronized(lock){frames=0;sumP=null;leq=null;overallP=0;overallLeq=OctaveAnalyzer.FLOOR;last=null;}
+  synchronized(lock){
+   frames=0;sumP=null;leq=null;overallP=0;overallLeq=OctaveAnalyzer.FLOOR;
+   aPower=0;cPower=0;zPower=0;
+   aLeq=OctaveAnalyzer.FLOOR;cLeq=OctaveAnalyzer.FLOOR;zLeq=OctaveAnalyzer.FLOOR;last=null;
+  }
   if(chart!=null)chart.show(mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD,null,null,graphMode());
  }
  private String fmt(double d){return String.format(Locale.US,"%.1f",d);}
@@ -352,8 +360,10 @@ public final class MainActivity extends Activity {
  }
  private void refresh(){
   if(status==null)return;
-  OctaveAnalyzer.Result r;double[] l;double sum;int count;
-  synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
+  OctaveAnalyzer.Result r;double[] l;double sum,avgA,avgC,avgZ;int count;
+  synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;
+   avgA=aLeq;avgC=cLeq;avgZ=zLeq;
+  }
   status.setText(recording?(capturingBackground?"● RECORDING AMBIENT • MOTOR OFF":"● RECORDING MOTOR NOISE"):
    (autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
@@ -368,6 +378,9 @@ public final class MainActivity extends Activity {
   level.setText(r==null?"--.-":shown(r.overall));
   units.setText(levelUnits()+"  •  "+new String[]{"Z","A","C"}[weighting]+" weighting");
   average.setText(r==null?"Leq: --.-":"Leq: "+shown(sum)+((levelMode==4&&factoryMethod!=0)?" dB SPL":" dBFS"));
+  weightedSummary.setText(r==null?"Broadband Leq: A --  C --  Z --":
+    "Broadband Leq  A "+shown(avgA)+" • C "+shown(avgC)+" • Z "+shown(avgZ)
+    +((levelMode==4&&factoryMethod!=0)?" dB SPL*":" dBFS")+" | Z-A "+fmt(avgZ-avgA)+" dB");
   long measuredSec=Math.round((double)count*OctaveAnalyzer.N/rate);
   details.setText(String.format(Locale.US,"Time %02d:%02d   •   %d Hz   •   %s",
     measuredSec/60,measuredSec%60,rate,source));
@@ -502,12 +515,19 @@ public final class MainActivity extends Activity {
     OctaveAnalyzer.Result r=OctaveAnalyzer.analyze(frame,rate,b,w);
     synchronized(lock){
      if(b!=mode||w!=weighting)continue;
-     if(sumP==null||sumP.length!=r.live.length){sumP=new double[r.live.length];frames=0;overallP=0;}
+     if(sumP==null||sumP.length!=r.live.length){
+       sumP=new double[r.live.length];frames=0;overallP=0;aPower=0;cPower=0;zPower=0;
+      }
      frames++;leq=new double[r.live.length];
      for(int i=0;i<r.live.length;i++){
       sumP[i]+=Math.pow(10,r.live[i]/10);leq[i]=OctaveAnalyzer.db(sumP[i]/frames);
      }
-     overallP+=Math.pow(10,r.overall/10);overallLeq=OctaveAnalyzer.db(overallP/frames);last=r;
+     overallP+=Math.pow(10,r.overall/10);overallLeq=OctaveAnalyzer.db(overallP/frames);
+     aPower+=Math.pow(10,r.overallA/10);cPower+=Math.pow(10,r.overallC/10);zPower+=Math.pow(10,r.overallZ/10);
+     aLeq=OctaveAnalyzer.db(aPower/frames);
+     cLeq=OctaveAnalyzer.db(cPower/frames);
+     zLeq=OctaveAnalyzer.db(zPower/frames);
+     last=r;
     }
     runOnUiThread(()->{if(recording)refresh();});
     if(durationSeconds>0 && SystemClock.elapsedRealtime()-measurementStartMs>=(long)durationSeconds*1000L){
@@ -781,8 +801,10 @@ public final class MainActivity extends Activity {
 
  private String cleanCsv(String s){return s==null?"":s.replace(',', ' ').replace('\n',' ').replace('\r',' ').trim();}
  private void export(){
-  OctaveAnalyzer.Result r;double[] l;int count;double overall;
-  synchronized(lock){r=last;l=leq==null?null:leq.clone();count=frames;overall=overallLeq;}
+  OctaveAnalyzer.Result r;double[] l;int count;double overall,avgA,avgC,avgZ;
+  synchronized(lock){
+   r=last;l=leq==null?null:leq.clone();count=frames;overall=overallLeq;avgA=aLeq;avgC=cLeq;avgZ=zLeq;
+  }
   if(r==null){toast("Measure first");return;}
   StringBuilder sb=new StringBuilder();
   sb.append("GK Octave Analyzer,FFT-based indicative sound analysis\n");
@@ -824,6 +846,14 @@ public final class MainActivity extends Activity {
   sb.append("Overall displayed Leq,").append(shown(overall)).append("\n");
   sb.append("Overall raw live dBFS,").append(fmt(r.overall)).append("\n");
   sb.append("Overall raw Leq dBFS,").append(fmt(overall)).append("\n");
+  sb.append("Broadband A-weighted raw Leq dBFS,").append(fmt(avgA)).append("\n");
+  sb.append("Broadband C-weighted raw Leq dBFS,").append(fmt(avgC)).append("\n");
+  sb.append("Broadband Z-weighted raw Leq dBFS,").append(fmt(avgZ)).append("\n");
+  sb.append("Broadband A-weighted displayed Leq,").append(fmt(withCal(avgA))).append("\n");
+  sb.append("Broadband C-weighted displayed Leq,").append(fmt(withCal(avgC))).append("\n");
+  sb.append("Broadband Z-weighted displayed Leq,").append(fmt(withCal(avgZ))).append("\n");
+  sb.append("Z minus A weighted difference dB,").append(fmt(avgZ-avgA)).append("\n");
+  sb.append("Compare reference meter,Use SAME weighting/time/distance. No arbitrary offsets applied.\n");
   sb.append("Caution,Indicative FFT only. Factory nominal reference is not individually verified. Not certified for motor noise tests or hearing safety.\n");
   sb.append("Center Hz,Displayed live,Displayed Leq,Raw live dBFS,Raw Leq dBFS,Ambient raw Leq dBFS,Net motor raw Leq dBFS,Motor-minus-background dB\n");
   for(int i=0;i<r.live.length;i++){
