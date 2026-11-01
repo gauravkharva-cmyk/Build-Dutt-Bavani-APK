@@ -11,6 +11,8 @@ import android.media.audiofx.*;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.InputType;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.*;
 import android.widget.*;
 import java.io.OutputStream;
@@ -29,6 +31,10 @@ public final class MainActivity extends Activity {
  private volatile long measurementStartMs=0;
  private volatile boolean autoStopped=false;
  private volatile boolean guidedCapture=false;
+ private volatile boolean capturingBackground=false, lastWasBackground=false;
+ private double[] ambientLeq=null; private double ambientOverall=Double.NaN;
+ private int ambientMode=-1,ambientWeighting=-1,ambientFrames=0;
+ private String ambientRecordedAt="not recorded";
  private int savedDuration=60;
  private int rate=48000,frames=0;
  private volatile AudioRecord audio;
@@ -47,7 +53,11 @@ public final class MainActivity extends Activity {
  private TextView status,level,units,average,details,warning,durationBadge,calibrationBadge,relativeAdjustmentText;
  private SpectrumView chart;private LinearLayout table;
  private Button start,one,third,calButton,saveButton,estimateButton;
- private Spinner weightingPicker;
+ private Spinner weightingPicker,supplyType;
+ private EditText motorId,motorRpm,motorLineHz,motorLoad,micDistance,micPosition;
+ private Button ambientButton;
+ private TextView ambientSummary,motorHarmonics,correctedSummary;
+ private LinearLayout correctedTable;
  private String pendingCsv;
  private String source="not started";
 
@@ -103,6 +113,46 @@ public final class MainActivity extends Activity {
  private LinearLayout.LayoutParams lp(int w,int h,int bottom){
   LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w,h);p.bottomMargin=px(bottom);return p;
  }
+ private static final class SimpleTextWatcher implements TextWatcher {
+  private final Runnable callback;
+  SimpleTextWatcher(Runnable task){callback=task;}
+  @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+  @Override public void onTextChanged(CharSequence s,int start,int before,int count){callback.run();}
+  @Override public void afterTextChanged(Editable s){}
+ }
+ private EditText motorField(String label,String initial,boolean numeric,LinearLayout container){
+  container.addView(txt(label,11,GREY,true),lp(-1,-2,1));
+  EditText e=new EditText(this);
+  e.setTextColor(WHITE);e.setTextSize(14);e.setSingleLine(true);
+  if(numeric)e.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  e.setText(initial);
+  container.addView(e,lp(-1,px(42),7));
+  return e;
+ }
+ private EditText motorFieldInline(String label,String initial,boolean numeric,LinearLayout holder){
+  LinearLayout column=col();
+  column.addView(txt(label,11,GREY,true));
+  EditText e=new EditText(this);e.setTextColor(WHITE);e.setTextSize(14);e.setSingleLine(true);
+  if(numeric)e.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  e.setText(initial);column.addView(e,lp(-1,px(40),0));
+  LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
+  params.rightMargin=px(10);holder.addView(column,params);
+  return e;
+ }
+ private double fieldNumber(EditText v){
+  try{return Double.parseDouble(v.getText().toString().trim());}catch(Exception e){return Double.NaN;}
+ }
+ private void updateMotorHints(){
+  if(motorHarmonics==null)return;
+  double rpm=fieldNumber(motorRpm),f=fieldNumber(motorLineHz);
+  StringBuilder text=new StringBuilder("Expected source frequencies (not diagnoses): ");
+  if(Double.isFinite(rpm)&&rpm>0&&rpm<60000){
+    double shaft=rpm/60.0;
+    text.append("shaft 1X ").append(fmt(shaft)).append(" Hz, 2X ").append(fmt(2*shaft)).append(" Hz");
+  }else text.append("enter RPM");
+  if(Double.isFinite(f)&&f>0&&f<5000)text.append("; 2× electrical ").append(fmt(2*f)).append(" Hz");
+  motorHarmonics.setText(text.toString());
+ }
  private void ui(){
   ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);
   LinearLayout content=col();content.setPadding(px(16),px(16),px(16),px(24));
@@ -118,7 +168,26 @@ public final class MainActivity extends Activity {
   menuButton.setOnClickListener(v->showOptions(menuButton));
   content.addView(top,lp(-1,px(50),3));
   content.addView(txt("Octave Sound Analyzer",26,WHITE,true),lp(-1,-2,4));
-  content.addView(txt("Live mobile microphone  •  1/1 & 1/3 octave",13,GREY,false),lp(-1,-2,5));
+  content.addView(txt("Motor acoustic diagnostics • 1/1 & 1/3 octave",13,GREY,false),lp(-1,-2,8));
+  content.addView(txt("MOTOR TEST CONDITIONS",12,GREY,true),lp(-1,-2,5));
+  motorId=motorField("Motor ID / serial no.",getPreferences(MODE_PRIVATE).getString("motorId",""),false,content);
+  LinearLayout row1=row();content.addView(row1,lp(-1,-2,5));
+  motorRpm=motorFieldInline("Speed RPM","1500",true,row1);
+  motorLineHz=motorFieldInline("Supply frequency Hz","50",true,row1);
+  LinearLayout row2=row();content.addView(row2,lp(-1,-2,5));
+  motorLoad=motorFieldInline("Load %","",true,row2);
+  micDistance=motorFieldInline("Mic distance m","1.0",true,row2);
+  micPosition=motorField("Measurement position (e.g. DE side)", "",false,content);
+  content.addView(txt("POWER SUPPLY",11,GREY,true),lp(-1,-2,2));
+  supplyType=new Spinner(this);
+  ArrayAdapter<String> supplyAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
+    new String[]{"Direct supply (DOL)","VFD / inverter"});
+  supplyType.setAdapter(supplyAdapter);content.addView(supplyType,lp(-1,px(42),6));
+  motorHarmonics=txt("",12,GREEN,false);
+  content.addView(motorHarmonics,lp(-1,-2,11));
+  motorRpm.addTextChangedListener(new SimpleTextWatcher(()->updateMotorHints()));
+  motorLineHz.addTextChangedListener(new SimpleTextWatcher(()->updateMotorHints()));
+  updateMotorHints();
   durationBadge=txt("",13,GREEN,true);
   content.addView(durationBadge,lp(-1,-2,6));
   LinearLayout panel=col();panel.setPadding(px(17),px(15),px(17),px(14));
@@ -146,11 +215,22 @@ public final class MainActivity extends Activity {
   weightingPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
    public void onNothingSelected(android.widget.AdapterView<?> parent){}
    public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id){
-    if(weighting!=position){weighting=position;reset();refresh();}
+    if(weighting!=position){if(recording){weightingPicker.setSelection(weighting);toast("Stop before changing weighting");return;}weighting=position;reset();refresh();}
    }
   });
-  start=btn("Start measuring",GREEN);content.addView(start,lp(-1,px(51),11));
-  start.setOnClickListener(v->{if(recording)stop();else begin();});
+  start=btn("Measure MOTOR running",GREEN);content.addView(start,lp(-1,px(51),8));
+  start.setOnClickListener(v->{
+    if(recording){stop();return;}
+    capturingBackground=false;begin();
+  });
+  ambientButton=btn("Record BACKGROUND (motor OFF)",Color.rgb(129,185,237));
+  content.addView(ambientButton,lp(-1,px(46),6));
+  ambientButton.setOnClickListener(v->{
+    if(recording){toast("Stop the current recording first");return;}
+    capturingBackground=true;begin();
+  });
+  ambientSummary=txt("Background not captured • motor OFF, same microphone position",12,Color.rgb(252,206,113),true);
+  content.addView(ambientSummary,lp(-1,-2,11));
   LinearLayout actions=row();content.addView(actions,lp(-1,px(48),14));
   calButton=btn("Microphone info",Color.rgb(129,185,237));
   saveButton=btn("Save CSV",Color.rgb(252,206,113));
@@ -164,7 +244,13 @@ public final class MainActivity extends Activity {
   content.addView(txt("BAND LEVELS (Hz / LIVE / Leq)",12,GREY,true),lp(-1,-2,7));
   table=col();table.setBackground(bg(PANEL));table.setPadding(px(12),px(10),px(12),px(10));
   content.addView(table,lp(-1,-2,12));makeTable();
-  content.addView(txt("SPL is calculated ONLY when the device declares the Android UNPROCESSED audio source and provides either microphone sensitivity or the Android CDD nominal 1 kHz/94 dB reference. Without those, raw dBFS is displayed; do not treat it as SPL. The octave FFT is not IEC 61260-1/61672 certified.",12,GREY,false),lp(-1,-2,13));
+  content.addView(txt("MOTOR-ONLY OCTAVE SPECTRUM • BACKGROUND COMPARISON",12,GREY,true),lp(-1,-2,5));
+  correctedSummary=txt("Capture background with motor OFF, then measure running motor.",12,Color.rgb(252,206,113),false);
+  content.addView(correctedSummary,lp(-1,-2,7));
+  correctedTable=col();correctedTable.setBackground(bg(PANEL));
+  correctedTable.setPadding(px(10),px(9),px(10),px(9));
+  content.addView(correctedTable,lp(-1,-2,11));makeCorrectedTable();
+  content.addView(txt("MOTOR TEST CAUTION: On this tablet, raw dBFS is useful for comparing spectra at fixed settings but is NOT motor sound power or calibrated SPL. Android MIC processing/gain can change between runs. Motor-only subtraction is exploratory: <3 dB separation is unusable; 3–10 dB is uncertain. IEC 60034-9 / ISO 3744 acceptance requires suitable calibrated microphones, defined microphone positions and environment corrections.",12,GREY,false),lp(-1,-2,13));
   TextView credit=txt("Developed By: Gaurav Kharva",12,GREY,true);
   credit.setGravity(Gravity.END);content.addView(credit);
  }
@@ -172,6 +258,59 @@ public final class MainActivity extends Activity {
   TextView t=txt(label,13,color,false);t.setGravity(Gravity.CENTER_VERTICAL);
   t.setLayoutParams(new LinearLayout.LayoutParams(0,px(25),1));return t;
  }
+ 
+ private boolean ambientCompatible(){
+  return ambientLeq!=null&&ambientMode==mode&&ambientWeighting==weighting;
+ }
+ private static double motorNet(double motorDb,double ambientDb){
+  double delta=motorDb-ambientDb;
+  if(!Double.isFinite(delta)||delta<=3.0)return Double.NaN;
+  return motorDb+10*Math.log10(1-Math.pow(10,-delta/10));
+ }
+ private void makeCorrectedTable(){
+  if(correctedTable==null)return;
+  correctedTable.removeAllViews();
+  LinearLayout head=row();
+  head.addView(cell("Band",GREY));head.addView(cell("Motor",GREY));
+  head.addView(cell("Ambient",GREY));head.addView(cell("Net motor",GREY));
+  correctedTable.addView(head);
+  String[] bands=mode==1?OctaveAnalyzer.OCT:OctaveAnalyzer.THIRD;
+  for(String name:bands){
+    LinearLayout line=row();
+    line.addView(cell(name+" Hz",WHITE));line.addView(cell("--",GREEN));
+    line.addView(cell("--",Color.rgb(252,206,113)));
+    line.addView(cell("--",WHITE));correctedTable.addView(line);
+  }
+ }
+ private void refreshCorrected(double[] motorLevels){
+  if(correctedSummary==null||correctedTable==null)return;
+  boolean matched=ambientCompatible();
+  boolean showMotor=motorLevels!=null&&!lastWasBackground&&!capturingBackground;
+  if(!matched)correctedSummary.setText("Record background with motor OFF, using the SAME band and weighting settings.");
+  else if(!showMotor)correctedSummary.setText("Background ready. Measure the running motor at the same microphone position.");
+  else{
+    double overall;
+    synchronized(lock){overall=overallLeq;}
+    double delta=overall-ambientOverall;
+    String quality=delta<=3?"NOT SEPARABLE (≤3 dB)":delta<10?"UNCERTAIN (3–10 dB)":"strong separation (≥10 dB)";
+    correctedSummary.setText("Overall motor–background separation: "+fmt(delta)+" dB • "+quality+
+     " | Net is logarithmic energy subtraction (uncalibrated dBFS)");
+  }
+  for(int i=0;i<correctedTable.getChildCount()-1;i++){
+    LinearLayout line=(LinearLayout)correctedTable.getChildAt(i+1);
+    TextView motor=(TextView)line.getChildAt(1);
+    TextView bg=(TextView)line.getChildAt(2);
+    TextView net=(TextView)line.getChildAt(3);
+    motor.setText(showMotor?fmt(motorLevels[i]):"--");
+    bg.setText(matched?fmt(ambientLeq[i]):"--");
+    if(showMotor&&matched){
+      double difference=motorLevels[i]-ambientLeq[i];
+      double corrected=motorNet(motorLevels[i],ambientLeq[i]);
+      net.setText(Double.isNaN(corrected)?"BG high":(difference<10?"≈":"")+fmt(corrected));
+    }else net.setText("--");
+  }
+ }
+
  private void makeTable(){
   if(table==null)return;
   table.removeAllViews();
@@ -184,9 +323,10 @@ public final class MainActivity extends Activity {
   }
  }
  private void setMode(int b){
+  if(recording){toast("Stop before changing octave bands");return;}
   mode=b;one.setBackground(bg(b==1?GREEN:PANEL));one.setTextColor(b==1?BG:WHITE);
   third.setBackground(bg(b==3?GREEN:PANEL));third.setTextColor(b==3?BG:WHITE);
-  makeTable();reset();refresh();
+  makeTable();makeCorrectedTable();reset();refresh();
  }
  private void reset(){
   autoStopped=false;
@@ -214,7 +354,8 @@ public final class MainActivity extends Activity {
   if(status==null)return;
   OctaveAnalyzer.Result r;double[] l;double sum;int count;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();sum=overallLeq;count=frames;}
-  status.setText(guidedCapture?"● QUIET-ROOM BASELINE (10 SECONDS)":recording?"● LIVE MEASUREMENT":(autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
+  status.setText(recording?(capturingBackground?"● RECORDING AMBIENT • MOTOR OFF":"● RECORDING MOTOR NOISE"):
+   (autoStopped?"● TIMED MEASUREMENT COMPLETE":"● Ready / stopped"));
   status.setTextColor(recording?GREEN:GREY);
   if(calibrationBadge!=null){
     calibrationBadge.setText(levelMode==0?"RAW DIGITAL INPUT  •  dBFS":
@@ -242,7 +383,13 @@ public final class MainActivity extends Activity {
    }
   }
   calButton.setEnabled(true);saveButton.setEnabled(r!=null);
-  start.setText(recording?"Stop measuring":"Start measuring");
+  ambientButton.setEnabled(!recording);
+  ambientSummary.setText(ambientLeq==null?
+      "Background not captured • run with motor OFF, same mic position and settings":
+      "Background captured • "+ambientRecordedAt+" • "+ambientFrames+" FFT frames • "+
+      (ambientMode==mode&&ambientWeighting==weighting?"ready":"different bands / weighting: re-record"));
+  refreshCorrected(l);
+  start.setText(recording?(capturingBackground?"Stop BACKGROUND":"Stop MOTOR"):"Measure MOTOR running");
   start.setBackground(bg(recording?Color.rgb(255,146,124):GREEN));
  }
  private void evaluateFactoryReference(AudioRecord mic,boolean declaredUnprocessed){
@@ -318,9 +465,12 @@ public final class MainActivity extends Activity {
     }
     if(mic!=null)break;
    }
-   if(mic==null){toast("Unable to access microphone");return;}
+   if(mic==null){capturingBackground=false;toast("Unable to access microphone");return;}
    rate=selectedRate;source=selectedSource==MediaRecorder.AudioSource.UNPROCESSED?"Unprocessed mic":"Microphone";
-   reset();disableAudioEffects(mic.getAudioSessionId());
+   reset();
+   getPreferences(MODE_PRIVATE).edit().putString("motorId",motorId.getText().toString().trim()).apply();
+   lastWasBackground=capturingBackground;
+   disableAudioEffects(mic.getAudioSessionId());
    mic.startRecording();
    if(mic.getRecordingState()!=AudioRecord.RECORDSTATE_RECORDING)throw new IllegalStateException("Microphone did not start");
    evaluateFactoryReference(mic,supportsUnprocessed&&selectedSource==MediaRecorder.AudioSource.UNPROCESSED);
@@ -330,7 +480,7 @@ public final class MainActivity extends Activity {
    worker=new Thread(()->capture(use),"gk-octave-capture");worker.start();refresh();
   }catch(Exception ex){
    recording=false;if(mic!=null){try{mic.release();}catch(Exception ignored){}}
-   audio=null;toast("Microphone: "+ex.getMessage());refresh();
+   audio=null;capturingBackground=false;toast("Microphone: "+ex.getMessage());refresh();
   }
  }
  private void disableAudioEffects(int session){
@@ -363,14 +513,9 @@ public final class MainActivity extends Activity {
     if(durationSeconds>0 && SystemClock.elapsedRealtime()-measurementStartMs>=(long)durationSeconds*1000L){
      runOnUiThread(()->{
       if(recording){
-       boolean wasGuided=guidedCapture;
-       autoStopped=true;
-       stop();
-       if(wasGuided){
-         estimateFromRoom();
-       }else{
-         toast("Measurement time completed. Select Save CSV to save the results.");
-       }
+       boolean baseline=capturingBackground;
+       autoStopped=true;stop();
+       toast(baseline?"Background captured. Measure the running motor next.":"Motor measurement complete. Save CSV to export.");
       }
      });
      break;
@@ -385,6 +530,18 @@ public final class MainActivity extends Activity {
  }
  private void stop(){
   recording=false;
+  if(capturingBackground){
+    synchronized(lock){
+      if(leq!=null&&frames>=3){
+        ambientLeq=leq.clone();
+        ambientOverall=overallLeq;
+        ambientFrames=frames;
+        ambientMode=mode;ambientWeighting=weighting;
+        ambientRecordedAt=new SimpleDateFormat("HH:mm:ss",Locale.US).format(new Date());
+      }else toast("Background recording too short. Repeat.");
+    }
+    capturingBackground=false;
+  }
   if(guidedCapture){guidedCapture=false;durationSeconds=savedDuration;}
   AudioRecord m=audio;
   if(m!=null)try{m.stop();}catch(Exception ignored){}
@@ -428,6 +585,11 @@ public final class MainActivity extends Activity {
   PopupMenu popup=new PopupMenu(this,anchor);
   popup.getMenu().add("Time for measurement • "+durationLabel())
     .setOnMenuItemClickListener(item->{chooseDuration();return true;});
+  popup.getMenu().add("Clear background reference")
+    .setOnMenuItemClickListener(item->{
+      if(recording){toast("Stop first");return true;}
+      ambientLeq=null;ambientOverall=Double.NaN;ambientFrames=0;refresh();return true;
+    });
   popup.getMenu().add("Save CSV report")
     .setOnMenuItemClickListener(item->{export();return true;});
   popup.getMenu().add("SPL / raw dBFS units")
@@ -617,6 +779,7 @@ public final class MainActivity extends Activity {
    }).setNegativeButton("Cancel",null).show();
  }
 
+ private String cleanCsv(String s){return s==null?"":s.replace(',', ' ').replace('\n',' ').replace('\r',' ').trim();}
  private void export(){
   OctaveAnalyzer.Result r;double[] l;int count;double overall;
   synchronized(lock){r=last;l=leq==null?null:leq.clone();count=frames;overall=overallLeq;}
@@ -625,6 +788,24 @@ public final class MainActivity extends Activity {
   sb.append("GK Octave Analyzer,FFT-based indicative sound analysis\n");
   sb.append("Timestamp,").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z",Locale.US).format(new Date())).append("\n");
   sb.append("Device,").append(android.os.Build.MANUFACTURER).append(" ").append(android.os.Build.MODEL).append("\n");
+  sb.append("Motor ID,").append(cleanCsv(motorId.getText().toString())).append("\n");
+  sb.append("RPM,").append(cleanCsv(motorRpm.getText().toString())).append("\n");
+  sb.append("Supply frequency Hz,").append(cleanCsv(motorLineHz.getText().toString())).append("\n");
+  sb.append("Power supply,").append(cleanCsv(supplyType.getSelectedItem().toString())).append("\n");
+  sb.append("Load percent,").append(cleanCsv(motorLoad.getText().toString())).append("\n");
+  sb.append("Microphone distance metres,").append(cleanCsv(micDistance.getText().toString())).append("\n");
+  sb.append("Measurement position,").append(cleanCsv(micPosition.getText().toString())).append("\n");
+  sb.append("Measurement type,").append(lastWasBackground?"Background (motor OFF)":"Motor operating").append("\n");
+  sb.append("Background captured,").append(ambientCompatible()?"YES":"NO (or incompatible settings)").append("\n");
+  sb.append("Background timestamp,").append(ambientRecordedAt).append("\n");
+  if(ambientCompatible()){
+    sb.append("Background overall raw Leq dBFS,").append(fmt(ambientOverall)).append("\n");
+    sb.append("Overall net raw dBFS (if separable),");
+    double net=motorNet(overall,ambientOverall);
+    sb.append(!lastWasBackground&&Double.isFinite(net)?fmt(net):"not valid").append("\n");
+  }
+  sb.append("Motor acoustic warnings,FFT octave estimate (not IEC 61260 class certified); Android MIC AGC may invalidate subtraction; no measured sound power level\n");
+
   sb.append("Band mode,").append(mode==1?"1/1 Octave":"1/3 Octave").append("\n");
   sb.append("Weighting,").append(new String[]{"Z","A","C"}[weighting]).append("\n");
   sb.append("Sample rate (Hz),").append(rate).append("\n");
@@ -644,10 +825,15 @@ public final class MainActivity extends Activity {
   sb.append("Overall raw live dBFS,").append(fmt(r.overall)).append("\n");
   sb.append("Overall raw Leq dBFS,").append(fmt(overall)).append("\n");
   sb.append("Caution,Indicative FFT only. Factory nominal reference is not individually verified. Not certified for motor noise tests or hearing safety.\n");
-  sb.append("Center Hz,Displayed live,Displayed Leq,Raw live dBFS,Raw Leq dBFS\n");
+  sb.append("Center Hz,Displayed live,Displayed Leq,Raw live dBFS,Raw Leq dBFS,Ambient raw Leq dBFS,Net motor raw Leq dBFS,Motor-minus-background dB\n");
   for(int i=0;i<r.live.length;i++){
-    sb.append(String.format(Locale.US,"%.3f,%.2f,%.2f,%.2f,%.2f\n",
-      r.center[i],withCal(r.live[i]),withCal(l[i]),r.live[i],l[i]));
+    boolean compatible=ambientCompatible()&&!lastWasBackground;
+    double net=compatible?motorNet(l[i],ambientLeq[i]):Double.NaN;
+    sb.append(String.format(Locale.US,"%.3f,%.2f,%.2f,%.2f,%.2f,%s,%s,%s\n",
+      r.center[i],withCal(r.live[i]),withCal(l[i]),r.live[i],l[i],
+      compatible?fmt(ambientLeq[i]):"",
+      Double.isFinite(net)?fmt(net):"",
+      compatible?fmt(l[i]-ambientLeq[i]):""));
   }
   pendingCsv=sb.toString();
   Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
