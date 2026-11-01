@@ -1,32 +1,24 @@
-# GK Sketch Studio v1.1 – Advanced Offline Sketchbook
+# GK Sketch Studio v1.2 — Advanced Offline Drawing App
 
-Original Android drawing app with a **white paper canvas** and light interface. Developed By : Gaurav Kharva.
+A new, original sketching app for Android 10+ phones and tablets. **Developed By : Gaurav Kharva**.
 
-## Drawing and painting
-- Ink, pencil, marker, airbrush, watercolor, neon, charcoal, pixel, calligraphy and eraser brushes.
-- Brush size/opacity, color picker, color palette and pressure-aware strokes.
-- Straight line, rectangle, ellipse and arrow tools, bucket fill and grid guides.
-- Vertical, horizontal, both and radial symmetry; zoom/pan, stylus-only mode.
+## New in v1.2
 
-## Editing (new in 1.1)
-- Rectangular selection with visible boundary and handles; Select All and Deselect.
-- Copy, Cut, Paste (pasted pixels form a new layer), Duplicate, Delete selection.
-- Move selected pixels or the entire active layer with the Move tool.
-- Flip selection horizontally or vertically, rotate 90°, crop canvas to selection.
-- Advanced edit toolbar always accessible; actions also available in tools panel and More menu.
-- Editable multiline text: create a new text layer, later select the text layer and use Edit Text.
-- Text color, font size, family, alignment, bold and italic; Move tool repositions text layers.
-- Undo/redo for edits to layer pixels and text; clear active layer.
+- Independent brush, eraser, line, and shape-border thickness controls (1–300 px) with eight quick presets.
+- Adjustable color palette, custom brush and line colors, 1–100% opacity, configurable colored shape fill.
+- Eraser options: remove to transparency, erase to white, or paint with selected color.
+- Eight line styles: solid, dashed, dotted, dash-dot, long dash, double, wavy, zigzag.
+- 18 shapes: rectangle, rounded rectangle, ellipse, triangle, diamond, pentagon, hexagon, octagon, star, starburst, heart, cloud, speech bubble, arrow, chevron, parallelogram, cross, arc. Outline/fill/both modes.
+- 34 *bundled, transparent PNG objects* organized by category (nature, symbols, everyday objects, arrows, frames). Tap to insert as a new movable layer; scale, flip, rotate, copy, export. Own PNG/JPEG image import remains available.
 
-## Layers and files
-- Up to 20 raster layers with visibility, opacity, blend mode, duplication and layer order.
-- Auto-save in the offline gallery (IndexedDB), editable `.gkdraw` import/export including text metadata.
-- Import images as layers; export PNG/JPEG with opaque white background.
-- Android phone and tablet layouts, no INTERNET permission, no ads or tracking SDK.
+## Retained from v1.1
 
-## Install / build
-Use Android Studio with JDK 17 and Android SDK 35, or the GitHub Actions build workflow. The CI builds a debug-signed APK.
+White drawing paper, 10 brush presets, stylus-pressure-aware strokes, layers with blend/opacity/visibility, rectangular selection, cut/copy/paste and transforms, multiline editable text layers, symmetry, grid, pan/zoom, undo/redo, local save, `.gkdraw` editable projects and PNG/JPEG export.
 
-**Important upgrading note:** CI debug builds may use different signing keys. If Android says "App not installed" while updating v1.0, first **export your .gkdraw project backups**, then uninstall the previous APK and install v1.1. Removing the old app can delete locally saved artwork.
+### Notes
 
-**Current limits:** Rectangular selection (not lasso/magic wand); raster brush layers (text stays editable only until painted into); 12-state undo cap and 20 layers; no AI generation or PSD support. The source is independent of Sketchbook's proprietary app.
+This is a standalone offline drawing editor; the PNG object pack is bundled locally (no internet required). No remote APIs, no tracking, no network permission. APK is compiled using the GitHub Actions workflow. Device testing is separate from build verification. **Export editable `.gkdraw` projects before uninstalling a previous APK**; GitHub debug build signatures can vary between runs, potentially preventing an in-place update.
+
+## Build
+
+JDK 17 / Android Gradle Plugin 8.7.3 / Gradle 8.10.2, API 35; `gradle :app:assembleDebug`.
