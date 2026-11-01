@@ -24,81 +24,139 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
 .action{border:0;width:100%;height:65px;margin-top:17px;border-radius:18px;background:linear-gradient(120deg,#2ce0c4,#71f3dc);color:#09232b;font-size:18px;font-weight:850;box-shadow:0 8px 24px #2ce0c426;display:flex;justify-content:center;align-items:center;gap:12px}.action.stop{background:linear-gradient(120deg,#ffb87c,#ffddad);box-shadow:0 8px 24px #ffc78b24}.action:disabled{opacity:.6}.action svg{width:23px;height:23px}
 .footnote{font-size:11px;color:#7891a7;text-align:center;line-height:1.55;margin:16px 5px 8px}.footnote strong{color:#a5bbce}.credit{text-align:center;font-weight:700;color:#65849a;font-size:11px;letter-spacing:1.1px;margin-top:12px}#error{display:none;color:#ffcba2;background:#402d30;border-radius:12px;font-size:12px;padding:10px;margin:10px 0}
 @media(max-width:360px){.shell{padding:19px 12px}.card{padding:16px 12px}.secondary{grid-template-columns:127px 1fr}.volumeDial{width:120px;height:120px}.frequencyInputWrap input{font-size:17px}.finebtn{width:51px}.waveBtn{font-size:10px}.dialValue{font-size:34px}}
+
+.waveGrid{grid-template-columns:repeat(3,1fr);margin-top:14px}
+.waveBtn{min-height:71px}
+.graphInfo{margin:12px 0;color:#96aec2;font-size:11px;line-height:1.5}
+.scopeHeader{display:flex;justify-content:space-between;color:#a1b8cb;font-size:10px;letter-spacing:1px;font-weight:800;margin:19px 0 8px}
+#scopeStatus{color:#42e7cf}
+.scopeWrap{background:#0b1828;border:1px solid #35516a;border-radius:15px;overflow:hidden;position:relative;touch-action:pan-y}
+.scopeWrap.drawing{border-color:#42e7cf;touch-action:none}
+#scope{width:100%;height:168px;display:block}
+.scopeLabels{display:flex;justify-content:space-between;gap:6px;font-size:10px;color:#7c99b0;margin:7px 2px}
+.waveActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.utility{flex:1 1 135px;min-height:44px;padding:10px 8px;border:1px solid #38556c;background:#22344a;border-radius:11px;color:#daeeff;font-size:11px;font-weight:800}
+.utility.save{background:#174a49;color:#87ffe9;border-color:#24746b}
+.utility.active{background:#145149;border-color:#42e7cf;color:#42e7cf}
+.utility[hidden]{display:none}
+.credit{text-align:right;letter-spacing:.35px;color:#b3cadd;font-size:11px;margin:16px 4px 6px}
 </style></head>
 <body><main class="shell"><header><div class="brand"><div class="brandmark">∿</div><div><h1>GK Tone Generator</h1><p>PRECISION AUDIO LAB</p></div></div><div class="status" id="status"><span class="dot"></span><span id="statusText">STANDBY</span></div></header>
 <section class="card"><div class="sectionHead"><span class="eyebrow">FREQUENCY CONTROL</span><span class="unit">0.1 Hz precision</span></div><div class="frequencyDial" id="frequencyDial" role="slider" tabindex="0" aria-label="Frequency" aria-valuemin="20" aria-valuemax="20000" aria-valuenow="440" aria-valuetext="440.0 hertz"><svg id="freqSvg" viewBox="0 0 300 300" aria-hidden="true"><defs><radialGradient id="dialFill"><stop stop-color="#263b50"/><stop offset=".85" stop-color="#182a3e"/><stop offset="1" stop-color="#102033"/></radialGradient><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#44647a"/><stop offset=".5" stop-color="#172739"/><stop offset="1" stop-color="#3c5871"/></linearGradient></defs><circle cx="150" cy="150" r="105" fill="url(#dialFill)" stroke="url(#edge)" stroke-width="3"/><path id="freqTrack" fill="none" stroke="#304457" stroke-width="9" stroke-linecap="round"/><path id="freqProgress" fill="none" stroke="#42e7cf" stroke-width="9" stroke-linecap="round"/><g id="ticks"></g><line id="freqNeedle" stroke="#4cedda" stroke-width="4" stroke-linecap="round" x1="150" y1="69" x2="150" y2="86"/><circle cx="150" cy="150" r="85" fill="none" stroke="#ffffff09" stroke-width="1"/></svg><div class="dialText"><div class="dialValue" id="displayHz">440.0 <small>Hz</small></div><div class="dialCaption">OUTPUT FREQUENCY</div></div></div>
 <div class="controls"><button type="button" class="finebtn" id="minus" aria-label="Decrease frequency 0.1 hertz">−</button><div class="frequencyInputWrap"><input id="freqInput" inputmode="decimal" type="number" min="20" max="20000" step="0.1" value="440.0" aria-label="Type exact frequency in hertz"><label for="freqInput">Hz</label></div><button type="button" class="finebtn" id="plus" aria-label="Increase frequency 0.1 hertz">+</button></div><div class="fineHint">Rotate dial • Tap − / + for 0.1 Hz steps • Type exact value</div></section>
 <section class="card secondary"><div class="volumeDial" id="volumeDial" role="slider" tabindex="0" aria-label="Output volume percentage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="10"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="65" fill="#1b2d41" stroke="#385269" stroke-width="2"/><path id="volTrack" stroke="#324559" stroke-width="10" stroke-linecap="round" fill="none"/><path id="volProgress" stroke="#ffcf8b" stroke-width="10" stroke-linecap="round" fill="none"/><line id="volNeedle" x1="100" y1="48" x2="100" y2="62" stroke="#ffcf8b" stroke-width="4" stroke-linecap="round"/></svg><div class="volLabel"><div class="volNum"><span id="volNum">10</span><small>%</small></div><p>LEVEL</p></div></div><div class="levelInfo"><h3>Output Level</h3><p>Set relative tone loudness. Start low, especially with headphones.</p><div class="levelBtns"><button type="button" data-volume="0">Mute</button><button type="button" data-volume="10">10%</button><button type="button" data-volume="25">25%</button></div></div></section>
-<section class="card"><div class="subHeading">WAVEFORM</div><div class="waveGrid"><button class="waveBtn selected" type="button" data-wave="sine" aria-pressed="true"><svg viewBox="0 0 44 24"><path d="M1 12 C7 -2 14 -2 22 12 S36 26 43 12"/></svg>Sine</button><button class="waveBtn" type="button" data-wave="triangle" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 12 L11 2 L22 22 L33 2 L43 12"/></svg>Triangle</button><button class="waveBtn" type="button" data-wave="square" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L22 3 L22 21 L43 21 L43 3"/></svg>Square</button><button class="waveBtn" type="button" data-wave="sawtooth" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L21 3 L21 21 L42 3 L42 21"/></svg>Sawtooth</button></div></section>
+<section class="card"><div class="sectionHead"><div class="subHeading" style="margin:0">WAVEFORM INPUT</div><span class="unit" id="waveType">SINE</span></div>
+<p class="graphInfo">Choose a waveform to generate. Choose Custom to draw your own single-cycle shape.</p>
+<div class="waveGrid"><button class="waveBtn selected" type="button" data-wave="sine" aria-pressed="true"><svg viewBox="0 0 44 24"><path d="M1 12 C7 -2 14 -2 22 12 S36 26 43 12"/></svg>Sine</button><button class="waveBtn " type="button" data-wave="triangle" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 12 L11 2 L22 22 L33 2 L43 12"/></svg>Triangle</button><button class="waveBtn " type="button" data-wave="square" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L22 3 L22 21 L43 21 L43 3"/></svg>Square</button><button class="waveBtn " type="button" data-wave="sawtooth" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L21 3 L21 21 L42 3 L42 21"/></svg>Saw</button><button class="waveBtn " type="button" data-wave="pulse" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L11 3 L11 21 L22 21 L22 3 L32 3 L32 21 L43 21"/></svg>Pulse 25%</button><button class="waveBtn " type="button" data-wave="custom" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 15 L8 6 L14 17 L20 3 L28 20 L35 8 L43 12"/></svg>Custom</button></div>
+<div class="scopeHeader"><span>GENERATED WAVEFORM PREVIEW</span><span id="scopeStatus">READY</span></div>
+<div class="scopeWrap" id="scopeWrap"><canvas id="scope" aria-label="Synthesized waveform preview, touch to draw when Custom edit is enabled"></canvas></div>
+<div class="scopeLabels"><span>0°</span><span id="wavePreviewInfo">2 cycles · 440.0 Hz</span><span>720°</span></div>
+<div class="waveActions"><button type="button" id="drawCustom" class="utility" aria-pressed="false">✎ DRAW CUSTOM</button><button type="button" id="resetCustom" class="utility" hidden>RESET SHAPE</button><button type="button" id="saveWave" class="utility save">↓ SAVE 3-SEC WAV</button></div>
+<p class="graphInfo">Preview is a synthesized signal shape, not a microphone measurement. Saved WAV uses the selected waveform and frequency.</p></section>
 <section class="card"><div class="subHeading">QUICK FREQUENCIES</div><div class="presetRow"><button class="preset" data-freq="50">50 Hz</button><button class="preset" data-freq="100">100 Hz</button><button class="preset" data-freq="440">440 Hz</button><button class="preset" data-freq="1000">1 kHz</button><button class="preset" data-freq="5000">5 kHz</button><button class="preset" data-freq="10000">10 kHz</button><button class="preset" data-freq="18000">18 kHz</button></div></section>
-<div id="error" role="alert"></div><button type="button" class="action" id="toggle"><svg viewBox="0 0 24 24" fill="currentColor"><path id="playIcon" d="M7 4v16l14-8z"/></svg><span id="toggleText">START SOUND</span></button><div class="footnote">This is a <strong>tone generator</strong>, not a calibrated dB SPL meter. Speakers may not reproduce all frequencies. High-frequency tones can be uncomfortable and there is no reliable evidence that phone-generated ultrasonic tones repel mosquitoes.</div><div class="credit">DEVELOPED BY : GAURAV KHARVA</div>
+<div id="error" role="alert"></div><button type="button" class="action" id="toggle"><svg viewBox="0 0 24 24" fill="currentColor"><path id="playIcon" d="M7 4v16l14-8z"/></svg><span id="toggleText">GENERATE &amp; PLAY WAVEFORM</span></button><div class="footnote">This is a <strong>tone generator</strong>, not a calibrated dB SPL meter. Speakers may not reproduce all frequencies. High-frequency tones can be uncomfortable and there is no reliable evidence that phone-generated ultrasonic tones repel mosquitoes.</div><div class="credit">Developed By : Gaurav Kharva</div>
 </main>
 <script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id), MIN=20,MAX=20000, START=210,SWEEP=300;
-let frequency=440, volume=10, wave='sine', context=null,oscillator=null,gain=null,isPlaying=false;
-const ns='http://www.w3.org/2000/svg';
-const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
-const pos=(r,a)=>{const rad=a*Math.PI/180;return [r*Math.cos(rad),r*Math.sin(rad)]};
-const coord=(cx,cy,r,angle)=>{const [x,y]=pos(r,angle);return [cx+x,cy+y]};
-function arc(cx,cy,r,pct){const sweep=SWEEP*clamp(pct,0,1);const a=coord(cx,cy,r,START), b=coord(cx,cy,r,START+(sweep||.001));return `M ${a[0].toFixed(3)} ${a[1].toFixed(3)} A ${r} ${r} 0 ${sweep>180?1:0} 1 ${b[0].toFixed(3)} ${b[1].toFixed(3)}`}
+
+(() => {
+'use strict';
+const $=id=>document.getElementById(id), MIN=20, MAX=20000, START=210, SWEEP=300, ns='http://www.w3.org/2000/svg';
+let frequency=440, volume=10, wave='sine', context=null, oscillator=null, gain=null, isPlaying=false, drawMode=false, drawing=false, lastIdx=0, lastY=0;
+const custom=new Float32Array(128);
+for(let i=0;i<128;i++) custom[i]=Math.sin(2*Math.PI*i/128);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const coord=(cx,cy,r,a)=>[cx+r*Math.cos(a*Math.PI/180),cy+r*Math.sin(a*Math.PI/180)];
+function arc(cx,cy,r,pct){const span=SWEEP*clamp(pct,0,1),a=coord(cx,cy,r,START),b=coord(cx,cy,r,START+(span||.001));return 'M '+a[0].toFixed(3)+' '+a[1].toFixed(3)+' A '+r+' '+r+' 0 '+(span>180?1:0)+' 1 '+b[0].toFixed(3)+' '+b[1].toFixed(3)}
 function line(el,cx,cy,r1,r2,ang){const a=coord(cx,cy,r1,ang),b=coord(cx,cy,r2,ang);for(const [key,v] of Object.entries({x1:a[0],y1:a[1],x2:b[0],y2:b[1]}))el.setAttribute(key,v.toFixed(3))}
 function initGraphics(){
-$('freqTrack').setAttribute('d',arc(150,150,123,1));$('volTrack').setAttribute('d',arc(100,100,79,1));
-const ticks=$('ticks');for(let i=0;i<=60;i++){
-const a=START+i*SWEEP/60,major=i%10===0,mid=i%5===0;
-const e=document.createElementNS(ns,'line');line(e,150,150,major?130:(mid?132:135),major?144:141,a);e.setAttribute('stroke',major?'#9db5cb':'#4a6178');e.setAttribute('stroke-width',major?2.7:1.3);e.setAttribute('stroke-linecap','round');ticks.appendChild(e);
-}
+ $('freqTrack').setAttribute('d',arc(150,150,123,1));$('volTrack').setAttribute('d',arc(100,100,79,1));
+ const ticks=$('ticks');
+ for(let i=0;i<=60;i++){const a=START+i*SWEEP/60,major=i%10===0,mid=i%5===0,e=document.createElementNS(ns,'line');line(e,150,150,major?130:(mid?132:135),major?144:141,a);e.setAttribute('stroke',major?'#9db5cb':'#4a6178');e.setAttribute('stroke-width',major?2.7:1.3);e.setAttribute('stroke-linecap','round');ticks.appendChild(e)}
 }
 function freqRatio(hz){return Math.log(hz/MIN)/Math.log(MAX/MIN)}
-function setFrequency(raw,fromField=false){const n=Number(raw);if(!Number.isFinite(n))return;frequency=Math.round(clamp(n,MIN,MAX)*10)/10;
-const p=freqRatio(frequency);$('displayHz').innerHTML=frequency.toFixed(1)+' <small>Hz</small>';
-if(!fromField || document.activeElement!==$('freqInput'))$('freqInput').value=frequency.toFixed(1);
-$('freqProgress').setAttribute('d',arc(150,150,123,p));line($('freqNeedle'),150,150,69,86,START+SWEEP*p);
-$('frequencyDial').setAttribute('aria-valuenow',String(frequency));$('frequencyDial').setAttribute('aria-valuetext',frequency.toFixed(1)+' hertz');
-if(isPlaying&&oscillator&&context){oscillator.frequency.setTargetAtTime(frequency,context.currentTime,.012)}
+function setFrequency(raw,fromField=false){let n=Number(raw);if(!Number.isFinite(n))return;frequency=Math.round(clamp(n,MIN,MAX)*10)/10;
+ let p=freqRatio(frequency);$('displayHz').innerHTML=frequency.toFixed(1)+' <small>Hz</small>';
+ if(!fromField||document.activeElement!==$('freqInput'))$('freqInput').value=frequency.toFixed(1);
+ $('freqProgress').setAttribute('d',arc(150,150,123,p));line($('freqNeedle'),150,150,69,86,START+SWEEP*p);
+ $('frequencyDial').setAttribute('aria-valuenow',String(frequency));$('frequencyDial').setAttribute('aria-valuetext',frequency.toFixed(1)+' hertz');
+ if(isPlaying&&oscillator&&context)oscillator.frequency.setTargetAtTime(frequency,context.currentTime,.012);
+ drawScope();
 }
-function setVolume(v){volume=clamp(Math.round(Number(v)||0),0,100);$('volNum').textContent=volume;$('volumeDial').setAttribute('aria-valuenow',String(volume));
-$('volProgress').setAttribute('d',arc(100,100,79,volume/100));line($('volNeedle'),100,100,48,62,START+SWEEP*volume/100);
-if(isPlaying&&gain&&context)gain.gain.setTargetAtTime(volume/100*0.40,context.currentTime,.025)}
-function dialRatio(elem,event){const rect=elem.getBoundingClientRect();const x=(event.clientX-rect.left)/rect.width-.5,y=(event.clientY-rect.top)/rect.height-.5;
-let degrees=Math.atan2(y,x)*180/Math.PI;if(degrees<0)degrees+=360;
-let offset=(degrees-START+360)%360;
-if(offset>SWEEP)offset=offset<(SWEEP+360)/2?SWEEP:0;
-return offset/SWEEP}
-function attachDial(id,onDrag,step){const el=$(id);let active=false;
-el.addEventListener('pointerdown',e=>{if(e.button!==0)return;active=true;try{el.setPointerCapture(e.pointerId)}catch(_){ }onDrag(dialRatio(el,e));e.preventDefault()});
-el.addEventListener('pointermove',e=>{if(active){onDrag(dialRatio(el,e));e.preventDefault()}});
-const end=()=>active=false;el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
-el.addEventListener('keydown',e=>{if(['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)){step(e.key==='ArrowUp'||e.key==='ArrowRight'?1:-1);e.preventDefault()}})
+function setVolume(v){volume=clamp(Math.round(Number(v)||0),0,100);$('volNum').textContent=volume;$('volumeDial').setAttribute('aria-valuenow',String(volume));$('volProgress').setAttribute('d',arc(100,100,79,volume/100));line($('volNeedle'),100,100,48,62,START+SWEEP*volume/100);if(isPlaying&&gain&&context)gain.gain.setTargetAtTime(volume/100*.40,context.currentTime,.025)}
+function dialRatio(elem,event){const rect=elem.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width-.5,y=(event.clientY-rect.top)/rect.height-.5;let degrees=Math.atan2(y,x)*180/Math.PI;if(degrees<0)degrees+=360;let offset=(degrees-START+360)%360;if(offset>SWEEP)offset=offset<(SWEEP+360)/2?SWEEP:0;return offset/SWEEP}
+function attachDial(id,onDrag,step){const el=$(id);let active=false;el.addEventListener('pointerdown',e=>{if(e.button!==0)return;active=true;try{el.setPointerCapture(e.pointerId)}catch(_){}onDrag(dialRatio(el,e));e.preventDefault()});el.addEventListener('pointermove',e=>{if(active){onDrag(dialRatio(el,e));e.preventDefault()}});const end=()=>active=false;el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);el.addEventListener('keydown',e=>{if(['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)){step(e.key==='ArrowUp'||e.key==='ArrowRight'?1:-1);e.preventDefault()}})}
+function waveAt(type,phase){const t=((phase%1)+1)%1,angle=2*Math.PI*t;
+ switch(type){
+ case 'sine':return Math.sin(angle);
+ case 'triangle':return 2/Math.PI*Math.asin(Math.sin(angle));
+ case 'square':return t<.5?1:-1;
+ case 'sawtooth':return 2*t-1;
+ case 'pulse':return t<.25?1:-1/3;
+ case 'custom':{let x=t*custom.length,i=Math.floor(x),f=x-i;return custom[i%custom.length]*(1-f)+custom[(i+1)%custom.length]*f}
+ default:return 0;
+ }}
+function periodicFromSamples(samples){let n=samples.length, harmonics=64, real=new Float32Array(harmonics+1),imag=new Float32Array(harmonics+1);
+ for(let k=1;k<=harmonics;k++){let a=0,b=0;for(let i=0;i<n;i++){const theta=2*Math.PI*k*i/n;a+=samples[i]*Math.cos(theta);b+=samples[i]*Math.sin(theta)}real[k]=2*a/n;imag[k]=2*b/n}
+ return context.createPeriodicWave(real,imag,{disableNormalization:false});
 }
-function message(s){const e=$('error');e.textContent=s;e.style.display='block'}
-function updateState(){ $('toggle').classList.toggle('stop',isPlaying);$('toggleText').textContent=isPlaying?'STOP SOUND':'START SOUND';$('playIcon').setAttribute('d',isPlaying?'M6 4h4v16H6zM14 4h4v16h-4z':'M7 4v16l14-8z');$('status').classList.toggle('on',isPlaying);$('statusText').textContent=isPlaying?'PLAYING':'STANDBY'}
-async function startSound(){
-if(isPlaying)return;const AudioContextType=window.AudioContext||window.webkitAudioContext;if(!AudioContextType){message('This device or browser does not support Web Audio.');return}
-try{
-if(!context||context.state==='closed')context=new AudioContextType();
-await context.resume();
-oscillator=context.createOscillator();gain=context.createGain();oscillator.type=wave;oscillator.frequency.setValueAtTime(frequency,context.currentTime);
-gain.gain.setValueAtTime(0,context.currentTime);oscillator.connect(gain);gain.connect(context.destination);
-oscillator.start();gain.gain.setTargetAtTime(volume/100*0.40,context.currentTime,.03);
-isPlaying=true;$('error').style.display='none';updateState();
-}catch(err){isPlaying=false;updateState();message('Unable to start audio: '+(err&&err.message?err.message:String(err)))}
+function applyWave(){if(!oscillator||!context)return;
+ if(['sine','triangle','square','sawtooth'].includes(wave))oscillator.type=wave;
+ else{let samples=new Float32Array(128);for(let i=0;i<128;i++)samples[i]=waveAt(wave,i/128);oscillator.setPeriodicWave(periodicFromSamples(samples))}
 }
-function stopSound(){if(!isPlaying&&!oscillator)return;isPlaying=false;updateState();if(oscillator){const old=oscillator,oldGain=gain;oscillator=null;gain=null;
-try{if(context&&oldGain){let t=context.currentTime;oldGain.gain.cancelScheduledValues(t);oldGain.gain.setTargetAtTime(0,t,.008);old.stop(t+.07)}else old.stop()}catch(_){}old.onended=()=>{try{old.disconnect();oldGain&&oldGain.disconnect()}catch(_){}}}}
+function chooseWave(next){wave=next;for(const el of document.querySelectorAll('[data-wave]')){const selected=el.dataset.wave===wave;el.classList.toggle('selected',selected);el.setAttribute('aria-pressed',String(selected))}
+ $('waveType').textContent=wave==='pulse'?'PULSE 25%':wave.toUpperCase();
+ drawMode=false;$('drawCustom').classList.remove('active');$('drawCustom').setAttribute('aria-pressed','false');$('drawCustom').textContent='✎ DRAW CUSTOM';$('resetCustom').hidden=wave!=='custom';$('scopeWrap').classList.remove('drawing');
+ applyWave();drawScope();
+}
+function message(s){$('error').textContent=s;$('error').style.display='block'}
+function updateState(){$('toggle').classList.toggle('stop',isPlaying);$('toggleText').textContent=isPlaying?'STOP WAVEFORM GENERATION':'GENERATE & PLAY WAVEFORM';$('playIcon').setAttribute('d',isPlaying?'M6 4h4v16H6zM14 4h4v16h-4z':'M7 4v16l14-8z');$('status').classList.toggle('on',isPlaying);$('statusText').textContent=isPlaying?'PLAYING':'STANDBY';$('scopeStatus').textContent=isPlaying?'● GENERATING':(drawMode?'✎ EDITING':'READY');drawScope()}
+async function startSound(){if(isPlaying)return;const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio){message('Web Audio is not supported on this device.');return}
+ try{if(!context||context.state==='closed')context=new Audio();await context.resume();oscillator=context.createOscillator();gain=context.createGain();oscillator.frequency.setValueAtTime(frequency,context.currentTime);applyWave();
+ gain.gain.setValueAtTime(0,context.currentTime);oscillator.connect(gain);gain.connect(context.destination);oscillator.start();gain.gain.setTargetAtTime(volume/100*.40,context.currentTime,.03);isPlaying=true;$('error').style.display='none';updateState()}
+ catch(err){isPlaying=false;updateState();message('Cannot start audio: '+(err&&err.message?err.message:String(err)))}}
+function stopSound(){if(!isPlaying&&!oscillator)return;isPlaying=false;updateState();if(oscillator){const old=oscillator,oldGain=gain;oscillator=null;gain=null;try{if(context&&oldGain){const t=context.currentTime;oldGain.gain.cancelScheduledValues(t);oldGain.gain.setTargetAtTime(0,t,.008);old.stop(t+.07)}else old.stop()}catch(_){}old.onended=()=>{try{old.disconnect();oldGain&&oldGain.disconnect()}catch(_){}}}}
 window.stopSound=stopSound;
-initGraphics();setFrequency(440);setVolume(10);
-attachDial('frequencyDial',ratio=>setFrequency(MIN*Math.pow(MAX/MIN,ratio)),d=>setFrequency(frequency+d*.1));
-attachDial('volumeDial',ratio=>setVolume(ratio*100),d=>setVolume(volume+d));
-$('freqInput').addEventListener('change',e=>{setFrequency(e.target.value);e.target.value=frequency.toFixed(1)});
-$('freqInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.currentTarget.blur()}});
+function drawScope(){const canvas=$('scope'),r=canvas.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
+ if(!r.width||!r.height)return;
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+ const ctx=canvas.getContext('2d');ctx.clearRect(0,0,w,h);ctx.fillStyle='#0c1c2d';ctx.fillRect(0,0,w,h);
+ ctx.strokeStyle='#233d50';ctx.lineWidth=1;for(let x=0;x<=8;x++){ctx.beginPath();ctx.moveTo(x*w/8,0);ctx.lineTo(x*w/8,h);ctx.stroke()}for(let y=0;y<=4;y++){ctx.beginPath();ctx.moveTo(0,y*h/4);ctx.lineTo(w,y*h/4);ctx.stroke()}
+ ctx.strokeStyle='#527b86';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+ ctx.beginPath();ctx.lineWidth=Math.max(1.6,2*dpr);ctx.strokeStyle='#4cebd7';ctx.shadowBlur=6*dpr;ctx.shadowColor='#31c3b9';
+ const cycles=drawMode?1:2;
+ for(let i=0;i<w;i++){const v=waveAt(wave,cycles*i/Math.max(1,w-1)),y=h/2-v*h*.36;if(i===0)ctx.moveTo(i,y);else ctx.lineTo(i,y)}ctx.stroke();ctx.shadowBlur=0;
+ $('wavePreviewInfo').textContent=(drawMode?'1 cycle · draw to edit':'2 cycles')+' · '+frequency.toFixed(1)+' Hz';
+}
+function enterDraw(){if(wave!=='custom')chooseWave('custom');drawMode=!drawMode;$('drawCustom').classList.toggle('active',drawMode);$('drawCustom').setAttribute('aria-pressed',String(drawMode));$('drawCustom').textContent=drawMode?'✓ FINISH DRAWING':'✎ DRAW CUSTOM';$('scopeWrap').classList.toggle('drawing',drawMode);$('resetCustom').hidden=false;$('scopeStatus').textContent=drawMode?'✎ EDITING':(isPlaying?'● GENERATING':'READY');drawScope()}
+function customPoint(e){const box=$('scope').getBoundingClientRect(),x=clamp((e.clientX-box.left)/box.width,0,1),y=clamp(1-2*(e.clientY-box.top)/box.height,-1,1),idx=Math.round(x*(custom.length-1));if(drawing&&idx!==lastIdx){const start=Math.min(lastIdx,idx),end=Math.max(lastIdx,idx);for(let i=start;i<=end;i++){const t=(i-lastIdx)/(idx-lastIdx);custom[i]=lastY+(y-lastY)*t}}else custom[idx]=y;lastIdx=idx;lastY=y;drawScope()}
+const scope=$('scope');scope.addEventListener('pointerdown',e=>{if(!drawMode)return;drawing=true;scope.setPointerCapture(e.pointerId);const box=scope.getBoundingClientRect();lastIdx=Math.round(clamp((e.clientX-box.left)/box.width,0,1)*127);lastY=clamp(1-2*(e.clientY-box.top)/box.height,-1,1);custom[lastIdx]=lastY;drawScope();e.preventDefault()});
+scope.addEventListener('pointermove',e=>{if(drawing){customPoint(e);e.preventDefault()}});
+function drawingEnd(){if(drawing){drawing=false;applyWave();drawScope()}}
+scope.addEventListener('pointerup',drawingEnd);scope.addEventListener('pointercancel',drawingEnd);
+function createWav(){const rate=44100,seconds=3,samples=rate*seconds,totalBytes=44+samples*2,buf=new ArrayBuffer(totalBytes),view=new DataView(buf),encoder=new Uint8Array(buf);
+ const str=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i))};
+ str(0,'RIFF');view.setUint32(4,totalBytes-8,true);str(8,'WAVE');str(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);str(36,'data');view.setUint32(40,samples*2,true);
+ let v=clamp(volume/100,0,1)*.4;
+ for(let i=0;i<samples;i++){const fade=Math.min(1,i/(rate*.01),(samples-1-i)/(rate*.01)),sample=clamp(waveAt(wave,frequency*i/rate)*v*fade,-1,1);view.setInt16(44+i*2,Math.round(sample*32767),true)}
+ return encoder;
+}
+function toBase64(bytes){let out='';const size=0x4000;for(let i=0;i<bytes.length;i+=size){out+=String.fromCharCode.apply(null,bytes.subarray(i,i+size))}return btoa(out)}
+function saveWav(){try{const bytes=createWav(),name='GK_'+wave+'_'+frequency.toFixed(1).replace('.','p')+'Hz.wav';
+ if(window.GKFiles&&window.GKFiles.saveWav){window.GKFiles.saveWav(toBase64(bytes),name);return}
+ const blob=new Blob([bytes],{type:'audio/wav'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
+ }catch(err){message('Could not save WAV: '+(err.message||err))}}
+initGraphics();setFrequency(440);setVolume(10);chooseWave('sine');
+attachDial('frequencyDial',p=>setFrequency(MIN*Math.pow(MAX/MIN,p)),d=>setFrequency(frequency+d*.1));attachDial('volumeDial',p=>setVolume(p*100),d=>setVolume(volume+d));
+$('freqInput').addEventListener('change',e=>{setFrequency(e.target.value);e.target.value=frequency.toFixed(1)});$('freqInput').addEventListener('keydown',e=>{if(e.key==='Enter')e.currentTarget.blur()});
 $('minus').addEventListener('click',()=>setFrequency(frequency-.1));$('plus').addEventListener('click',()=>setFrequency(frequency+.1));
-let repeatTimer=null; // Fine-adjustment buttons also support native press-and-hold via browser click, deliberately single increments for accuracy.
-for(const b of document.querySelectorAll('[data-wave]'))b.addEventListener('click',()=>{wave=b.dataset.wave;for(const other of document.querySelectorAll('[data-wave]')){other.classList.toggle('selected',other===b);other.setAttribute('aria-pressed',String(other===b))}if(isPlaying&&oscillator){oscillator.type=wave}});
+for(const b of document.querySelectorAll('[data-wave]'))b.addEventListener('click',()=>chooseWave(b.dataset.wave));
 for(const b of document.querySelectorAll('[data-freq]'))b.addEventListener('click',()=>setFrequency(Number(b.dataset.freq)));
 for(const b of document.querySelectorAll('[data-volume]'))b.addEventListener('click',()=>setVolume(Number(b.dataset.volume)));
+$('drawCustom').addEventListener('click',enterDraw);
+$('resetCustom').addEventListener('click',()=>{for(let i=0;i<128;i++)custom[i]=Math.sin(2*Math.PI*i/128);applyWave();drawScope()});
+$('saveWave').addEventListener('click',saveWav);
 $('toggle').addEventListener('click',()=>{if(isPlaying)stopSound();else startSound()});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSound()});window.addEventListener('pagehide',stopSound);
+window.addEventListener('resize',drawScope);document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSound()});window.addEventListener('pagehide',stopSound);
 })();
+
 </script></body></html>

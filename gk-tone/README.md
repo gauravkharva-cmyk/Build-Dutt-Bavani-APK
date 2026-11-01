@@ -1,4 +1,5 @@
-# GK Tone Generator
-Builds a standalone offline Android APK with analog frequency and level dials, 20.0–20000.0 Hz, 0.1 Hz steps, four waveforms. No Internet permission.
-Developer credit: Gaurav Kharva.
-APK artifact: GK-Tone-Generator-APK.
+GK Tone / Waveform Generator v2.0
+6 waveform input choices: sine, triangle, square, sawtooth, pulse, custom draw.
+Live synthesized preview, play / stop, save 3-second PCM WAV through Android Save As dialog.
+0.1 Hz steps, analog dials, offline, Developed By : Gaurav Kharva.
+No internet or storage permissions needed.
