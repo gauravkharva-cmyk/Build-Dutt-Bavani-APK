@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#101927"><title>GK Tone Generator</title>
+<style>
+:root{--bg:#0b1421;--panel:#141f30;--rim:#263951;--line:#25374e;--light:#eaf4ff;--muted:#92a9be;--cyan:#42e7cf;--cyanDark:#157a76;--orange:#ffd38b;--radius:24px;font-family:system-ui,-apple-system,Roboto,'Segoe UI',sans-serif;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{min-height:100%;background:var(--bg)}body{margin:0;min-height:100vh;min-height:100dvh;background:radial-gradient(ellipse 80% 35% at 50% -8%,#1d3e55 0%,transparent 100%),var(--bg);color:var(--light)}
+button,input,select{font:inherit}button{cursor:pointer;touch-action:manipulation}
+.shell{width:min(620px,100%);margin:auto;padding:calc(25px + env(safe-area-inset-top,0px)) 20px calc(25px + env(safe-area-inset-bottom,0px))}
+header{display:flex;justify-content:space-between;align-items:center;margin:4px 0 20px;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.brandmark{background:#183e48;color:var(--cyan);border:1px solid #246b6d;width:43px;height:43px;display:grid;place-items:center;border-radius:14px;font-size:27px;font-weight:750}
+.brand h1{font-size:20px;font-weight:750;line-height:1.1;margin:0;letter-spacing:-.5px}.brand p{font-size:11px;letter-spacing:2px;color:var(--muted);margin:5px 0 0;font-weight:700}
+.status{display:flex;align-items:center;gap:7px;border:1px solid #314052;border-radius:99px;padding:8px 10px;color:#a9bbcb;font-size:11px;font-weight:800;letter-spacing:.6px;white-space:nowrap}.dot{width:7px;height:7px;background:#6b7c8b;border-radius:50%}.status.on .dot{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}.status.on{color:var(--cyan);border-color:#2b5e5d}
+.card{background:linear-gradient(155deg,#172438,#121e2e);border:1px solid #27394e;box-shadow:0 12px 32px #0002;border-radius:var(--radius);padding:18px 17px 19px;margin-top:14px}
+.sectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.eyebrow{font-size:11px;letter-spacing:2px;font-weight:800;color:#99b0c7}.unit{font-size:11px;color:#79f4e3;background:#173b43;padding:7px 9px;border-radius:9px;letter-spacing:.5px}
+.frequencyDial{display:block;position:relative;max-width:365px;aspect-ratio:1;margin:3px auto -2px;touch-action:none;user-select:none;cursor:grab}.frequencyDial:active{cursor:grabbing}
+.frequencyDial svg{width:100%;height:100%;display:block;overflow:visible;filter:drop-shadow(0 10px 16px #0003)}
+.dialText{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:70%;text-align:center;pointer-events:none}.dialValue{font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:-2px;font-size:clamp(32px,7vw,48px)}.dialValue small{font-weight:600;font-size:16px;color:#a3b7cc;letter-spacing:0;margin-left:3px}.dialCaption{color:#92a9be;font-size:11px;letter-spacing:2px;font-weight:750;margin-top:9px}
+.controls{display:flex;align-items:stretch;justify-content:center;gap:10px}.finebtn{height:51px;width:59px;border-radius:14px;border:1px solid #35506b;background:#20324a;color:#d6eeff;font-size:22px;font-weight:600}.finebtn:active{background:#2d4663}.frequencyInputWrap{display:flex;gap:3px;align-items:center;justify-content:center;flex:1;min-width:0;background:#0e1b2c;border:1px solid #334b60;border-radius:14px;padding:0 9px}.frequencyInputWrap input{width:100%;min-width:0;text-align:center;outline:0;border:0;background:transparent;color:#eaffff;font-size:21px;font-weight:700;font-variant-numeric:tabular-nums}.frequencyInputWrap label{font-size:12px;color:#8da7bc;font-weight:700}.fineHint{text-align:center;color:#7994a9;font-size:11px;margin:10px 0 0}
+.secondary{display:grid;grid-template-columns:155px 1fr;gap:8px;align-items:center;padding-bottom:20px}.volumeDial{width:145px;height:145px;position:relative;touch-action:none;user-select:none;margin:auto}.volumeDial svg{width:100%;height:100%;display:block}.volLabel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}.volNum{font-size:29px;font-weight:750;font-variant-numeric:tabular-nums}.volNum small{font-size:15px;color:#8ba3ba}.volLabel p{margin:3px 0 0;color:#92a9be;font-size:10px;font-weight:750;letter-spacing:1.2px}
+.levelInfo{min-width:0}.levelInfo h3{margin:0 0 5px;font-size:16px}.levelInfo p{margin:0 0 14px;color:var(--muted);font-size:12px;line-height:1.5}.levelBtns{display:flex;flex-wrap:wrap;gap:7px}.levelBtns button{min-width:50px;flex:1;background:#203149;border:1px solid #334961;border-radius:10px;color:#d5e8f7;font-size:12px;padding:10px 4px}
+.subHeading{font-size:12px;font-weight:750;color:#9bb0c4;letter-spacing:1px;margin:0 0 12px}.waveGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.waveBtn{border:1px solid #33465c;color:#aebfd0;border-radius:13px;padding:13px 5px;background:#182538;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;min-width:0}.waveBtn svg{width:40px;max-width:90%;height:22px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}.waveBtn.selected{border-color:var(--cyan);background:#153b40;color:var(--cyan)}
+.presetRow{display:flex;flex-wrap:wrap;gap:7px}.preset{border:1px solid #34465b;border-radius:11px;background:#1b2a3e;color:#cee0ef;padding:9px 12px;font-size:12px;font-weight:700}.preset:active{border-color:var(--cyan)}
+.action{border:0;width:100%;height:65px;margin-top:17px;border-radius:18px;background:linear-gradient(120deg,#2ce0c4,#71f3dc);color:#09232b;font-size:18px;font-weight:850;box-shadow:0 8px 24px #2ce0c426;display:flex;justify-content:center;align-items:center;gap:12px}.action.stop{background:linear-gradient(120deg,#ffb87c,#ffddad);box-shadow:0 8px 24px #ffc78b24}.action:disabled{opacity:.6}.action svg{width:23px;height:23px}
+.footnote{font-size:11px;color:#7891a7;text-align:center;line-height:1.55;margin:16px 5px 8px}.footnote strong{color:#a5bbce}.credit{text-align:center;font-weight:700;color:#65849a;font-size:11px;letter-spacing:1.1px;margin-top:12px}#error{display:none;color:#ffcba2;background:#402d30;border-radius:12px;font-size:12px;padding:10px;margin:10px 0}
+@media(max-width:360px){.shell{padding:19px 12px}.card{padding:16px 12px}.secondary{grid-template-columns:127px 1fr}.volumeDial{width:120px;height:120px}.frequencyInputWrap input{font-size:17px}.finebtn{width:51px}.waveBtn{font-size:10px}.dialValue{font-size:34px}}
+</style></head>
+<body><main class="shell"><header><div class="brand"><div class="brandmark">∿</div><div><h1>GK Tone Generator</h1><p>PRECISION AUDIO LAB</p></div></div><div class="status" id="status"><span class="dot"></span><span id="statusText">STANDBY</span></div></header>
+<section class="card"><div class="sectionHead"><span class="eyebrow">FREQUENCY CONTROL</span><span class="unit">0.1 Hz precision</span></div><div class="frequencyDial" id="frequencyDial" role="slider" tabindex="0" aria-label="Frequency" aria-valuemin="20" aria-valuemax="20000" aria-valuenow="440" aria-valuetext="440.0 hertz"><svg id="freqSvg" viewBox="0 0 300 300" aria-hidden="true"><defs><radialGradient id="dialFill"><stop stop-color="#263b50"/><stop offset=".85" stop-color="#182a3e"/><stop offset="1" stop-color="#102033"/></radialGradient><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#44647a"/><stop offset=".5" stop-color="#172739"/><stop offset="1" stop-color="#3c5871"/></linearGradient></defs><circle cx="150" cy="150" r="105" fill="url(#dialFill)" stroke="url(#edge)" stroke-width="3"/><path id="freqTrack" fill="none" stroke="#304457" stroke-width="9" stroke-linecap="round"/><path id="freqProgress" fill="none" stroke="#42e7cf" stroke-width="9" stroke-linecap="round"/><g id="ticks"></g><line id="freqNeedle" stroke="#4cedda" stroke-width="4" stroke-linecap="round" x1="150" y1="69" x2="150" y2="86"/><circle cx="150" cy="150" r="85" fill="none" stroke="#ffffff09" stroke-width="1"/></svg><div class="dialText"><div class="dialValue" id="displayHz">440.0 <small>Hz</small></div><div class="dialCaption">OUTPUT FREQUENCY</div></div></div>
+<div class="controls"><button type="button" class="finebtn" id="minus" aria-label="Decrease frequency 0.1 hertz">−</button><div class="frequencyInputWrap"><input id="freqInput" inputmode="decimal" type="number" min="20" max="20000" step="0.1" value="440.0" aria-label="Type exact frequency in hertz"><label for="freqInput">Hz</label></div><button type="button" class="finebtn" id="plus" aria-label="Increase frequency 0.1 hertz">+</button></div><div class="fineHint">Rotate dial • Tap − / + for 0.1 Hz steps • Type exact value</div></section>
+<section class="card secondary"><div class="volumeDial" id="volumeDial" role="slider" tabindex="0" aria-label="Output volume percentage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="10"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="65" fill="#1b2d41" stroke="#385269" stroke-width="2"/><path id="volTrack" stroke="#324559" stroke-width="10" stroke-linecap="round" fill="none"/><path id="volProgress" stroke="#ffcf8b" stroke-width="10" stroke-linecap="round" fill="none"/><line id="volNeedle" x1="100" y1="48" x2="100" y2="62" stroke="#ffcf8b" stroke-width="4" stroke-linecap="round"/></svg><div class="volLabel"><div class="volNum"><span id="volNum">10</span><small>%</small></div><p>LEVEL</p></div></div><div class="levelInfo"><h3>Output Level</h3><p>Set relative tone loudness. Start low, especially with headphones.</p><div class="levelBtns"><button type="button" data-volume="0">Mute</button><button type="button" data-volume="10">10%</button><button type="button" data-volume="25">25%</button></div></div></section>
+<section class="card"><div class="subHeading">WAVEFORM</div><div class="waveGrid"><button class="waveBtn selected" type="button" data-wave="sine" aria-pressed="true"><svg viewBox="0 0 44 24"><path d="M1 12 C7 -2 14 -2 22 12 S36 26 43 12"/></svg>Sine</button><button class="waveBtn" type="button" data-wave="triangle" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 12 L11 2 L22 22 L33 2 L43 12"/></svg>Triangle</button><button class="waveBtn" type="button" data-wave="square" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L22 3 L22 21 L43 21 L43 3"/></svg>Square</button><button class="waveBtn" type="button" data-wave="sawtooth" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L21 3 L21 21 L42 3 L42 21"/></svg>Sawtooth</button></div></section>
+<section class="card"><div class="subHeading">QUICK FREQUENCIES</div><div class="presetRow"><button class="preset" data-freq="50">50 Hz</button><button class="preset" data-freq="100">100 Hz</button><button class="preset" data-freq="440">440 Hz</button><button class="preset" data-freq="1000">1 kHz</button><button class="preset" data-freq="5000">5 kHz</button><button class="preset" data-freq="10000">10 kHz</button><button class="preset" data-freq="18000">18 kHz</button></div></section>
+<div id="error" role="alert"></div><button type="button" class="action" id="toggle"><svg viewBox="0 0 24 24" fill="currentColor"><path id="playIcon" d="M7 4v16l14-8z"/></svg><span id="toggleText">START SOUND</span></button><div class="footnote">This is a <strong>tone generator</strong>, not a calibrated dB SPL meter. Speakers may not reproduce all frequencies. High-frequency tones can be uncomfortable and there is no reliable evidence that phone-generated ultrasonic tones repel mosquitoes.</div><div class="credit">DEVELOPED BY : GAURAV KHARVA</div>
+</main>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id), MIN=20,MAX=20000, START=210,SWEEP=300;
+let frequency=440, volume=10, wave='sine', context=null,oscillator=null,gain=null,isPlaying=false;
+const ns='http://www.w3.org/2000/svg';
+const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
+const pos=(r,a)=>{const rad=a*Math.PI/180;return [r*Math.cos(rad),r*Math.sin(rad)]};
+const coord=(cx,cy,r,angle)=>{const [x,y]=pos(r,angle);return [cx+x,cy+y]};
+function arc(cx,cy,r,pct){const sweep=SWEEP*clamp(pct,0,1);const a=coord(cx,cy,r,START), b=coord(cx,cy,r,START+(sweep||.001));return `M ${a[0].toFixed(3)} ${a[1].toFixed(3)} A ${r} ${r} 0 ${sweep>180?1:0} 1 ${b[0].toFixed(3)} ${b[1].toFixed(3)}`}
+function line(el,cx,cy,r1,r2,ang){const a=coord(cx,cy,r1,ang),b=coord(cx,cy,r2,ang);for(const [key,v] of Object.entries({x1:a[0],y1:a[1],x2:b[0],y2:b[1]}))el.setAttribute(key,v.toFixed(3))}
+function initGraphics(){
+$('freqTrack').setAttribute('d',arc(150,150,123,1));$('volTrack').setAttribute('d',arc(100,100,79,1));
+const ticks=$('ticks');for(let i=0;i<=60;i++){
+const a=START+i*SWEEP/60,major=i%10===0,mid=i%5===0;
+const e=document.createElementNS(ns,'line');line(e,150,150,major?130:(mid?132:135),major?144:141,a);e.setAttribute('stroke',major?'#9db5cb':'#4a6178');e.setAttribute('stroke-width',major?2.7:1.3);e.setAttribute('stroke-linecap','round');ticks.appendChild(e);
+}
+}
+function freqRatio(hz){return Math.log(hz/MIN)/Math.log(MAX/MIN)}
+function setFrequency(raw,fromField=false){const n=Number(raw);if(!Number.isFinite(n))return;frequency=Math.round(clamp(n,MIN,MAX)*10)/10;
+const p=freqRatio(frequency);$('displayHz').innerHTML=frequency.toFixed(1)+' <small>Hz</small>';
+if(!fromField || document.activeElement!==$('freqInput'))$('freqInput').value=frequency.toFixed(1);
+$('freqProgress').setAttribute('d',arc(150,150,123,p));line($('freqNeedle'),150,150,69,86,START+SWEEP*p);
+$('frequencyDial').setAttribute('aria-valuenow',String(frequency));$('frequencyDial').setAttribute('aria-valuetext',frequency.toFixed(1)+' hertz');
+if(isPlaying&&oscillator&&context){oscillator.frequency.setTargetAtTime(frequency,context.currentTime,.012)}
+}
+function setVolume(v){volume=clamp(Math.round(Number(v)||0),0,100);$('volNum').textContent=volume;$('volumeDial').setAttribute('aria-valuenow',String(volume));
+$('volProgress').setAttribute('d',arc(100,100,79,volume/100));line($('volNeedle'),100,100,48,62,START+SWEEP*volume/100);
+if(isPlaying&&gain&&context)gain.gain.setTargetAtTime(volume/100*0.40,context.currentTime,.025)}
+function dialRatio(elem,event){const rect=elem.getBoundingClientRect();const x=(event.clientX-rect.left)/rect.width-.5,y=(event.clientY-rect.top)/rect.height-.5;
+let degrees=Math.atan2(y,x)*180/Math.PI;if(degrees<0)degrees+=360;
+let offset=(degrees-START+360)%360;
+if(offset>SWEEP)offset=offset<(SWEEP+360)/2?SWEEP:0;
+return offset/SWEEP}
+function attachDial(id,onDrag,step){const el=$(id);let active=false;
+el.addEventListener('pointerdown',e=>{if(e.button!==0)return;active=true;try{el.setPointerCapture(e.pointerId)}catch(_){ }onDrag(dialRatio(el,e));e.preventDefault()});
+el.addEventListener('pointermove',e=>{if(active){onDrag(dialRatio(el,e));e.preventDefault()}});
+const end=()=>active=false;el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+el.addEventListener('keydown',e=>{if(['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)){step(e.key==='ArrowUp'||e.key==='ArrowRight'?1:-1);e.preventDefault()}})
+}
+function message(s){const e=$('error');e.textContent=s;e.style.display='block'}
+function updateState(){ $('toggle').classList.toggle('stop',isPlaying);$('toggleText').textContent=isPlaying?'STOP SOUND':'START SOUND';$('playIcon').setAttribute('d',isPlaying?'M6 4h4v16H6zM14 4h4v16h-4z':'M7 4v16l14-8z');$('status').classList.toggle('on',isPlaying);$('statusText').textContent=isPlaying?'PLAYING':'STANDBY'}
+async function startSound(){
+if(isPlaying)return;const AudioContextType=window.AudioContext||window.webkitAudioContext;if(!AudioContextType){message('This device or browser does not support Web Audio.');return}
+try{
+if(!context||context.state==='closed')context=new AudioContextType();
+await context.resume();
+oscillator=context.createOscillator();gain=context.createGain();oscillator.type=wave;oscillator.frequency.setValueAtTime(frequency,context.currentTime);
+gain.gain.setValueAtTime(0,context.currentTime);oscillator.connect(gain);gain.connect(context.destination);
+oscillator.start();gain.gain.setTargetAtTime(volume/100*0.40,context.currentTime,.03);
+isPlaying=true;$('error').style.display='none';updateState();
+}catch(err){isPlaying=false;updateState();message('Unable to start audio: '+(err&&err.message?err.message:String(err)))}
+}
+function stopSound(){if(!isPlaying&&!oscillator)return;isPlaying=false;updateState();if(oscillator){const old=oscillator,oldGain=gain;oscillator=null;gain=null;
+try{if(context&&oldGain){let t=context.currentTime;oldGain.gain.cancelScheduledValues(t);oldGain.gain.setTargetAtTime(0,t,.008);old.stop(t+.07)}else old.stop()}catch(_){}old.onended=()=>{try{old.disconnect();oldGain&&oldGain.disconnect()}catch(_){}}}}
+window.stopSound=stopSound;
+initGraphics();setFrequency(440);setVolume(10);
+attachDial('frequencyDial',ratio=>setFrequency(MIN*Math.pow(MAX/MIN,ratio)),d=>setFrequency(frequency+d*.1));
+attachDial('volumeDial',ratio=>setVolume(ratio*100),d=>setVolume(volume+d));
+$('freqInput').addEventListener('change',e=>{setFrequency(e.target.value);e.target.value=frequency.toFixed(1)});
+$('freqInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.currentTarget.blur()}});
+$('minus').addEventListener('click',()=>setFrequency(frequency-.1));$('plus').addEventListener('click',()=>setFrequency(frequency+.1));
+let repeatTimer=null; // Fine-adjustment buttons also support native press-and-hold via browser click, deliberately single increments for accuracy.
+for(const b of document.querySelectorAll('[data-wave]'))b.addEventListener('click',()=>{wave=b.dataset.wave;for(const other of document.querySelectorAll('[data-wave]')){other.classList.toggle('selected',other===b);other.setAttribute('aria-pressed',String(other===b))}if(isPlaying&&oscillator){oscillator.type=wave}});
+for(const b of document.querySelectorAll('[data-freq]'))b.addEventListener('click',()=>setFrequency(Number(b.dataset.freq)));
+for(const b of document.querySelectorAll('[data-volume]'))b.addEventListener('click',()=>setVolume(Number(b.dataset.volume)));
+$('toggle').addEventListener('click',()=>{if(isPlaying)stopSound();else startSound()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSound()});window.addEventListener('pagehide',stopSound);
+})();
+</script></body></html>
