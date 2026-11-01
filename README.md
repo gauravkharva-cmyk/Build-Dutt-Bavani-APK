@@ -1,23 +1,32 @@
-# GK Sketch Studio
+# GK Sketch Studio v1.1 – Advanced Offline Sketchbook
 
-Original, offline Android sketching / digital painting application. Developed By : Gaurav Kharva.
+Original Android drawing app with a **white paper canvas** and light interface. Developed By : Gaurav Kharva.
 
-## Features
+## Drawing and painting
+- Ink, pencil, marker, airbrush, watercolor, neon, charcoal, pixel, calligraphy and eraser brushes.
+- Brush size/opacity, color picker, color palette and pressure-aware strokes.
+- Straight line, rectangle, ellipse and arrow tools, bucket fill and grid guides.
+- Vertical, horizontal, both and radial symmetry; zoom/pan, stylus-only mode.
 
-- Brush engine: ink, pencil, marker, airbrush, watercolor, neon, charcoal, pixel, calligraphy and eraser.
-- Stylus pressure variation, optional stylus-only palm rejection, multi-touch zoom/pan.
-- Editable layers with renaming, visibility, duplicate, opacity, ordering and blend modes (normal / multiply / screen / add).
-- Symmetry: vertical, horizontal, both and radial 6 / 8 / 12; optional grid.
-- Line, rectangle, ellipse, arrow, flood fill, text and color eyedropper.
-- Undo / redo for brush strokes, fills, text and geometric shapes.
-- Local gallery and automatic save via IndexedDB; editable `.gkdraw` project export and import.
-- Import PNG/JPG/etc. as a layer; export PNG or JPEG into Downloads/GK Sketch Studio.
-- Adaptive mobile and tablet interface; no network permissions, no online account, no tracking SDK.
+## Editing (new in 1.1)
+- Rectangular selection with visible boundary and handles; Select All and Deselect.
+- Copy, Cut, Paste (pasted pixels form a new layer), Duplicate, Delete selection.
+- Move selected pixels or the entire active layer with the Move tool.
+- Flip selection horizontally or vertically, rotate 90°, crop canvas to selection.
+- Advanced edit toolbar always accessible; actions also available in tools panel and More menu.
+- Editable multiline text: create a new text layer, later select the text layer and use Edit Text.
+- Text color, font size, family, alignment, bold and italic; Move tool repositions text layers.
+- Undo/redo for edits to layer pixels and text; clear active layer.
 
-## Build
+## Layers and files
+- Up to 20 raster layers with visibility, opacity, blend mode, duplication and layer order.
+- Auto-save in the offline gallery (IndexedDB), editable `.gkdraw` import/export including text metadata.
+- Import images as layers; export PNG/JPEG with opaque white background.
+- Android phone and tablet layouts, no INTERNET permission, no ads or tracking SDK.
 
-Open with Android Studio (JDK 17, Android SDK 35). Run `gradle :app:assembleDebug` with Gradle 8.10.2. GitHub Actions workflow builds the APK and uploads it as an artifact. `app/src/main/assets/index.html` can also be opened in a desktop browser for testing the drawing interface.
+## Install / build
+Use Android Studio with JDK 17 and Android SDK 35, or the GitHub Actions build workflow. The CI builds a debug-signed APK.
 
-## Notes / limitations
+**Important upgrading note:** CI debug builds may use different signing keys. If Android says "App not installed" while updating v1.0, first **export your .gkdraw project backups**, then uninstall the previous APK and install v1.1. Removing the old app can delete locally saved artwork.
 
-This is a new app with original implementation, not an authorized copy of the commercial Sketchbook app. Brush behaviors imitate familiar physical effects, not physics-grade paint simulation. Undo/redo captures the active layer for each painting action and is bounded to 12 steps / 30 MB; layer stack modifications are not undoable. Local browser storage can be cleared by Android app-data reset or uninstall. Export `.gkdraw` files for backup. Image export composites onto an opaque white background. Image gallery persistence uses device WebView IndexedDB; the export bridge writes only to public Downloads via MediaStore. Android 10+ is required.
+**Current limits:** Rectangular selection (not lasso/magic wand); raster brush layers (text stays editable only until painted into); 12-state undo cap and 20 layers; no AI generation or PSD support. The source is independent of Sketchbook's proprietary app.
