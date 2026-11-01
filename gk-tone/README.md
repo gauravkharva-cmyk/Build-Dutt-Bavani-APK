@@ -1,5 +1,5 @@
-GK Tone Generator v3.0
+# GK Tone Generator v4.0
 
-Output level uses relative dB from -60.0 dB to 0.0 dB, plus mute. The dial controls audio gain by an amplitude ratio of 10^(dB/20) with an app-limited maximum gain of 0.4 (0 dB rel). It does not measure dB SPL.
+Positive output scale: **0.0–60.0 dB above the application's minimum non-muted gain reference**, plus MUTE. The maximum permitted audio gain remains 0.4. This is an internal gain scale, *not a calibrated dB SPL reading*. Gain is `0.4 * 10^((displayed_dB - 60)/20)`, preserving the same audio levels as the former −60 to 0 dB-relative-to-maximum display. Mute is true zero amplitude. WAV uses the same mapping.
 
-Compact responsive phone layout shows frequency and output-level analog dials in one row, waveform selection and scope beneath, presets accessible by horizontal scroll. Supports 6 waveforms, custom drawing, live audio, 3-second WAV export, offline operation, and Developed By : Gaurav Kharva at bottom right.
+Mobile-friendly compact layout, independent rotary dials, waveform generators (sine, triangle, square, sawtooth, pulse, custom), waveform preview, export to WAV and 'Developed By : Gaurav Kharva' at the bottom right. No Internet permission.
