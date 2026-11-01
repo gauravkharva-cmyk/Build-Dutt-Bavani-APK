@@ -42,8 +42,8 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
 .credit{text-align:right;letter-spacing:.35px;color:#b3cadd;font-size:11px;margin:16px 4px 6px}
 
 /* Responsive single-screen-first phone layout, without reducing touch targets below practical sizes */
-@media (max-width:650px){
- .shell{width:100%;max-width:520px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:calc(7px + env(safe-area-inset-top,0px)) 9px calc(10px + env(safe-area-inset-bottom,0px))}
+@media (max-width:900px){
+ .shell{width:100%;max-width:650px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:calc(7px + env(safe-area-inset-top,0px)) 9px calc(10px + env(safe-area-inset-bottom,0px))}
  .shell > header,.shell > section.card:nth-of-type(n+3),.shell > #error,.shell > .action,.shell > .footnote,.shell > .credit{grid-column:1/-1}
  header{margin:0;min-width:0}
  .brandmark{width:34px;height:34px;border-radius:9px;font-size:20px}
@@ -51,11 +51,11 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
  .brand h1{font-size:15px}
  .brand p{font-size:8px;letter-spacing:1px;margin:2px 0 0}
  .status{font-size:9px;padding:6px 7px}
- .card{min-width:0;margin-top:0;padding:10px 8px;border-radius:15px}
+ .card{min-width:0;margin-top:0;padding:8px 8px;border-radius:15px}
  .sectionHead{flex-wrap:wrap;gap:4px}
  .eyebrow,.subHeading{font-size:10px;letter-spacing:.5px}
  .unit{font-size:9px;padding:4px 6px}
- .frequencyDial{width:100%;max-width:185px;margin:0 auto -3px}
+ .frequencyDial{width:100%;max-width:165px;margin:0 auto -3px}
  .dialValue{font-size:clamp(21px,5.5vw,31px);letter-spacing:-.7px}
  .dialValue small{font-size:10px}
  .dialCaption{font-size:8px;letter-spacing:.2px}
@@ -66,7 +66,7 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
  .frequencyInputWrap label{font-size:9px}
  .fineHint{font-size:9px;line-height:1.25;margin:5px 0 0}
  .secondary{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:9px 7px 10px}
- .volumeDial{width:100%;max-width:172px;height:auto;aspect-ratio:1}
+ .volumeDial{width:100%;max-width:150px;height:auto;aspect-ratio:1}
  .volNum{font-size:clamp(17px,4.6vw,23px)}
  .volNum small{font-size:10px}
  .volLabel p{font-size:8px;letter-spacing:.5px}
@@ -76,14 +76,14 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
  .levelBtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
  .levelBtns button{min-height:32px;min-width:0;padding:3px 1px;font-size:10px;border-radius:8px}
  .waveGrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-top:7px}
- .waveBtn{min-height:49px;padding:4px 1px;gap:2px;border-radius:8px;font-size:9px;line-height:1.1}
+ .waveBtn{min-height:44px;padding:4px 1px;gap:2px;border-radius:8px;font-size:9px;line-height:1.1}
  .waveBtn svg{width:28px;height:20px}
  .graphInfo{font-size:10px;line-height:1.3;margin:5px 0}
  .scopeHeader{margin:8px 0 4px;font-size:9px}
- #scope{height:91px}
+ #scope{height:77px}
  .scopeLabels{font-size:9px;margin:3px 2px}
  .waveActions{margin-top:7px;gap:5px;flex-wrap:nowrap}
- .utility{flex:1 1 0;min-width:0;min-height:35px;padding:5px 3px;font-size:9px;line-height:1.2;border-radius:8px}
+ .utility{flex:1 1 0;min-width:0;min-height:33px;padding:5px 3px;font-size:9px;line-height:1.2;border-radius:8px}
  .presetRow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:3px}
  .presetRow::-webkit-scrollbar{display:none}
  .preset{flex:0 0 auto;padding:7px 9px;font-size:10px}
@@ -100,9 +100,9 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
  .levelBtns button{font-size:9px}
  .waveBtn{font-size:8px}
 }
-@media (max-width:650px) and (max-height:720px){
- .frequencyDial{max-width:145px}
- .volumeDial{max-width:137px}
+@media (max-width:900px) and (max-height:720px){
+ .frequencyDial{max-width:133px}
+ .volumeDial{max-width:125px}
  #scope{height:72px}
  .card{padding-top:7px;padding-bottom:7px}
  .graphInfo{font-size:9px}
@@ -118,15 +118,15 @@ header{display:flex;justify-content:space-between;align-items:center;margin:4px 
 <div class="controls"><button type="button" class="finebtn" id="minus" aria-label="Decrease frequency 0.1 hertz">−</button><div class="frequencyInputWrap"><input id="freqInput" inputmode="decimal" type="number" min="20" max="20000" step="0.1" value="440.0" aria-label="Type exact frequency in hertz"><label for="freqInput">Hz</label></div><button type="button" class="finebtn" id="plus" aria-label="Increase frequency 0.1 hertz">+</button></div><div class="fineHint">Rotate dial • Tap − / + for 0.1 Hz steps • Type exact value</div></section>
 <section class="card secondary"><div class="volumeDial" id="volumeDial" role="slider" tabindex="0" aria-label="Relative output level in decibels" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-24" aria-valuetext="-24.0 dB relative"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="65" fill="#1b2d41" stroke="#385269" stroke-width="2"/><path id="volTrack" stroke="#324559" stroke-width="10" stroke-linecap="round" fill="none"/><path id="volProgress" stroke="#ffcf8b" stroke-width="10" stroke-linecap="round" fill="none"/><line id="volNeedle" x1="100" y1="48" x2="100" y2="62" stroke="#ffcf8b" stroke-width="4" stroke-linecap="round"/></svg><div class="volLabel"><div class="volNum"><span id="volNum">−24.0</span><small> dB</small></div><p>RELATIVE LEVEL</p></div></div><div class="levelInfo"><h3>Output Level (dB)</h3><p>−60.0 to 0.0 dB relative to this app’s maximum gain, not dB SPL. Start low, especially with headphones.</p><div class="levelBtns"><button type="button" data-db="mute">Mute</button><button type="button" data-db="-40">−40 dB</button><button type="button" data-db="-20">−20 dB</button><button type="button" data-db="-6">−6 dB</button></div></div></section>
 <section class="card"><div class="sectionHead"><div class="subHeading" style="margin:0">WAVEFORM INPUT</div><span class="unit" id="waveType">SINE</span></div>
-<p class="graphInfo">Choose a waveform to generate. Choose Custom to draw your own single-cycle shape.</p>
+<p class="graphInfo">Choose a waveform or draw your own in Custom mode.</p>
 <div class="waveGrid"><button class="waveBtn selected" type="button" data-wave="sine" aria-pressed="true"><svg viewBox="0 0 44 24"><path d="M1 12 C7 -2 14 -2 22 12 S36 26 43 12"/></svg>Sine</button><button class="waveBtn " type="button" data-wave="triangle" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 12 L11 2 L22 22 L33 2 L43 12"/></svg>Triangle</button><button class="waveBtn " type="button" data-wave="square" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L22 3 L22 21 L43 21 L43 3"/></svg>Square</button><button class="waveBtn " type="button" data-wave="sawtooth" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L21 3 L21 21 L42 3 L42 21"/></svg>Saw</button><button class="waveBtn " type="button" data-wave="pulse" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 21 L1 3 L11 3 L11 21 L22 21 L22 3 L32 3 L32 21 L43 21"/></svg>Pulse 25%</button><button class="waveBtn " type="button" data-wave="custom" aria-pressed="false"><svg viewBox="0 0 44 24"><path d="M1 15 L8 6 L14 17 L20 3 L28 20 L35 8 L43 12"/></svg>Custom</button></div>
 <div class="scopeHeader"><span>GENERATED WAVEFORM PREVIEW</span><span id="scopeStatus">READY</span></div>
 <div class="scopeWrap" id="scopeWrap"><canvas id="scope" aria-label="Synthesized waveform preview, touch to draw when Custom edit is enabled"></canvas></div>
 <div class="scopeLabels"><span>0°</span><span id="wavePreviewInfo">2 cycles · 440.0 Hz</span><span>720°</span></div>
 <div class="waveActions"><button type="button" id="drawCustom" class="utility" aria-pressed="false">✎ DRAW CUSTOM</button><button type="button" id="resetCustom" class="utility" hidden>RESET SHAPE</button><button type="button" id="saveWave" class="utility save">↓ SAVE 3-SEC WAV</button></div>
-<p class="graphInfo">Preview is a synthesized signal shape, not a microphone measurement. Saved WAV uses the selected waveform and frequency.</p></section>
+<p class="graphInfo">Preview is synthesized, not microphone-measured. WAV uses your selected settings.</p></section>
 <section class="card"><div class="subHeading">QUICK FREQUENCIES</div><div class="presetRow"><button class="preset" data-freq="50">50 Hz</button><button class="preset" data-freq="100">100 Hz</button><button class="preset" data-freq="440">440 Hz</button><button class="preset" data-freq="1000">1 kHz</button><button class="preset" data-freq="5000">5 kHz</button><button class="preset" data-freq="10000">10 kHz</button><button class="preset" data-freq="18000">18 kHz</button></div></section>
-<div id="error" role="alert"></div><button type="button" class="action" id="toggle"><svg viewBox="0 0 24 24" fill="currentColor"><path id="playIcon" d="M7 4v16l14-8z"/></svg><span id="toggleText">GENERATE &amp; PLAY WAVEFORM</span></button><div class="footnote">The output dial shows <strong>relative dB</strong> (gain), not measured dB SPL. 0 dB is this app’s maximum output setting, not acoustic 0 dB. Speakers may not reproduce all frequencies. High-frequency tones can be uncomfortable and there is no reliable evidence that phone-generated ultrasonic tones repel mosquitoes.</div><div class="credit">Developed By : Gaurav Kharva</div>
+<div id="error" role="alert"></div><button type="button" class="action" id="toggle"><svg viewBox="0 0 24 24" fill="currentColor"><path id="playIcon" d="M7 4v16l14-8z"/></svg><span id="toggleText">GENERATE &amp; PLAY WAVEFORM</span></button><div class="footnote">Relative dB controls signal gain, <strong>not measured dB SPL</strong>. 0 dB is maximum app output, not acoustic silence. Start low, especially with headphones.</div><div class="credit">Developed By : Gaurav Kharva</div>
 </main>
 <script>
 
