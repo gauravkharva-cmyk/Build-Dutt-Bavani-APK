@@ -1,0 +1,40 @@
+name: Build Image to Video APK
+on:
+  push:
+    branches: [gk-image-to-video]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Keep installable APK
+        run: |
+          mkdir -p downloads
+          cp app/build/outputs/apk/debug/app-debug.apk downloads/GK-Image-to-Video.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GK-Image-to-Video-APK
+          path: downloads/GK-Image-to-Video.apk
+      - name: Publish APK to this branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f downloads/GK-Image-to-Video.apk
+          git commit -m 'Publish downloadable APK [skip ci]' || exit 0
+          git push origin HEAD:gk-image-to-video
