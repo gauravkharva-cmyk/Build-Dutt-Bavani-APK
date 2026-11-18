@@ -31,6 +31,7 @@ public final class DownloadService extends Service {
         JSONArray a=new JSONArray();
         for(Track t:unique.values())a.put(t.json());
         writeAtomic(queueFile(c),a.toString());
+        c.getSharedPreferences("download_state",MODE_PRIVATE).edit().putInt("pending_count",unique.size()).apply();
     }
     static ArrayList<Track> readQueue(Context c){
         ArrayList<Track> tasks=new ArrayList<>();
@@ -101,6 +102,7 @@ public final class DownloadService extends Service {
     private void runQueue(){
         int completed=0,errors=0;
         ArrayList<Track> tasks=readQueue(this);
+        getSharedPreferences("download_state",MODE_PRIVATE).edit().putInt("pending_count",tasks.size()).apply();
         ArrayList<Track> remaining=new ArrayList<>();
         for(int i=0;i<tasks.size();i++){
             Track t=tasks.get(i);
@@ -117,9 +119,13 @@ public final class DownloadService extends Service {
                 errors++;remaining.add(t);
                 setStatus("Retry later: "+t.title,completed,errors);
             }
+            // Save progress off the UI thread for reliable resume on next launch.
             try{writeAtomic(queueFile(this),asJson(remaining,tasks,i+1));}catch(Exception ignored){}
+            getSharedPreferences("download_state",MODE_PRIVATE).edit()
+                .putInt("pending_count",remaining.size()+tasks.size()-i-1).apply();
         }
         try{writeAtomic(queueFile(this),asJson(remaining,Collections.emptyList(),0));}catch(Exception ignored){}
+        getSharedPreferences("download_state",MODE_PRIVATE).edit().putInt("pending_count",remaining.size()).apply();
         setStatus(paused?"Paused":(errors>0?"Finished with "+errors+" failed; tap Resume to retry":"Downloads complete"),completed,errors);
         running.set(false);
         stopForeground(STOP_FOREGROUND_REMOVE);
@@ -236,6 +242,8 @@ public final class DownloadService extends Service {
             try{a=new JSONArray(readFile(completeFile(this)));}catch(Exception ignored){a=new JSONArray();}
             JSONObject j=t.json();j.put("uri",uri.toString());
             a.put(j);writeAtomic(completeFile(this),a.toString());
+            getSharedPreferences("download_state",MODE_PRIVATE).edit()
+                .putInt("total_done",a.length()).apply();
         }catch(Exception ignored){}
     }
     @Override public IBinder onBind(Intent intent){return null;}
