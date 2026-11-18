@@ -127,7 +127,13 @@ public final class DownloadedActivity extends Activity {
                 title.setText(data.optString("title","Untitled discourse"));
                 String info=data.optString("language","Other")+" • "+data.optString("series","Discourses");
                 String folder=data.optString("folder","");
-                meta.setText(info+(folder.isEmpty()?"":"\n"+folder));
+                String uri=data.optString("uri","");
+                android.content.SharedPreferences playback=getSharedPreferences("playback",MODE_PRIVATE);
+                int remembered=playback.getInt("position_"+Integer.toHexString(uri.hashCode()),
+                    uri.equals(playback.getString("uri",""))?playback.getInt("position",0):0);
+                String resumeInfo=remembered>=1000?" • Resume at "+readableTime(remembered):"";
+                meta.setText(info+resumeInfo+(folder.isEmpty()?"":"\n"+folder));
+                play.setText(remembered>=1000?"▶ Resume":"▶ Play");
                 play.setOnClickListener(v->play(data));
                 open.setOnClickListener(v->open(data));
                 item.setBackground(bg(position%2==0?0xff111E31:0xff142137,10));
@@ -236,6 +242,12 @@ public final class DownloadedActivity extends Activity {
         }
         adapter.notifyDataSetChanged();
         count.setText(shown.size()+" downloaded MP3 files"+(all.isEmpty()?" — none found yet":""));
+    }
+    private static String readableTime(int milliseconds){
+        int total=Math.max(0,milliseconds/1000);
+        int seconds=total%60,minutes=(total/60)%60,hours=total/3600;
+        return hours>0?String.format(Locale.ROOT,"%d:%02d:%02d",hours,minutes,seconds)
+            :String.format(Locale.ROOT,"%02d:%02d",minutes,seconds);
     }
     private void play(JSONObject t){
         String uri=t.optString("uri","");
