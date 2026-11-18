@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <application android:label="OSHO World Premium 2" android:theme="@android:style/Theme.Material.NoActionBar"
+    <application android:label="OSHO World Premium 3" android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false" android:allowBackup="false" android:icon="@android:drawable/ic_media_play">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -19,6 +19,6 @@
         </activity>
         <activity android:name=".DownloadedActivity" android:exported="false" />
         <service android:name=".DownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
-        <service android:name=".PlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <service android:name=".PlayerService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>
