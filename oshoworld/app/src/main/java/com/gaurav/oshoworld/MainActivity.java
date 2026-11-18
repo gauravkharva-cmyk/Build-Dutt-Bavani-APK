@@ -124,13 +124,13 @@ public final class MainActivity extends Activity {
         downloaded.setOnClickListener(v->startActivity(new Intent(this,DownloadedActivity.class)));
         lastPlay.setOnClickListener(v->{
             String uri=getSharedPreferences("playback",MODE_PRIVATE).getString("uri","");
-            String title=getSharedPreferences("playback",MODE_PRIVATE).getString("title","OSHO Discourse");
+            String lastTitle=getSharedPreferences("playback",MODE_PRIVATE).getString("title","OSHO Discourse");
             if(uri.isEmpty()){
                 startActivity(new Intent(this,DownloadedActivity.class));
                 return;
             }
             Intent intent=new Intent(this,PlayerService.class).setAction(PlayerService.PLAY);
-            intent.putExtra("uri",uri);intent.putExtra("title",title);
+            intent.putExtra("uri",uri);intent.putExtra("title",lastTitle);
             startForegroundService(intent);
         });
         LinearLayout langs=new LinearLayout(this);
