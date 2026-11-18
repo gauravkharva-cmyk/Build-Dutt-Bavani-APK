@@ -4,7 +4,7 @@ Private personal-use Android downloader and offline MP3 player.
 
 ## Features
 - Hindi, English and unclassified OSHO audio entries.
-- Refresh catalog from public `aagrawal207/OshoDiscourses` JSON sources.
+- Refresh the catalog directly from OSHO World's official audio API (English and Hindi series, subseries and MP3 episodes).
 - Import direct MP3 links if the online catalog is unavailable or incomplete.
 - Tap a recording to download it; queue the full catalog with Download all.
 - Persistent queue, retry of failed files, byte-range resume when host supports HTTP Range.
@@ -13,8 +13,8 @@ Private personal-use Android downloader and offline MP3 player.
 - Android 16 compatible; Android 8+ minimum.
 
 ## Important limitations
-- The third-party catalog is not an official OSHO World API and may omit some links or move; its availability and the ability to download each URL require testing on-device.
-- The site advertises around 5,640 recordings; the public third-party catalog may contain a different number.
+- The official OSHO World API was verified from GitHub Actions, but completing all series and every actual MP3 download remains untested on-device; some links may change or be unavailable.
+- The website advertises approximately 5,640 recordings; the available API inventory can differ and may change over time.
 - Android 15+ foreground data-sync jobs have OS time limits. Resume manually if the bulk queue is stopped.
 - Full-library downloads need large amounts of free storage.
 - Download only recordings publicly offered for free on OSHO World; this app is not affiliated with OSHO World.
