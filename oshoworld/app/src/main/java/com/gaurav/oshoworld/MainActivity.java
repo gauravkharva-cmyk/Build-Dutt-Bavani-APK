@@ -53,7 +53,7 @@ public final class MainActivity extends Activity {
         return t;
     }
     private Button button(String s,boolean accent){
-        Button b=new Button(this);b.setText(s);b.setTextAllCaps(false);
+        Button b=new Button(this);b.setText(s);b.setAllCaps(false);
         b.setTextColor(accent?BG:WHITE);
         b.setTextSize(13);b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
         b.setBackground(background(accent?GOLD:PANEL,14));
