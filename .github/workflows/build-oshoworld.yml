@@ -32,6 +32,27 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Check public MP3 catalog sources
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          base='https://raw.githubusercontent.com/aagrawal207/OshoDiscourses/main/OshoDiscourses/Resources/'
+          for name in ['ArchiveCatalog.json', 'OshoworldCatalog.json']:
+              u=base+name
+              try:
+                  req=urllib.request.Request(u,headers={'User-Agent':'OSHO-Android-Build'})
+                  data=urllib.request.urlopen(req,timeout=20).read()
+                  j=json.loads(data)
+                  def count(o):
+                      if isinstance(o,dict): return sum(count(k)+count(v) for k,v in o.items())
+                      if isinstance(o,list): return sum(count(x) for x in o)
+                      if isinstance(o,str): return int('.mp3' in o.lower())
+                      return 0
+                  print(name,'HTTP 200; JSON bytes',len(data),'MP3 mentions',count(j),'structure',type(j).__name__)
+                  print('sample',str(j)[:400])
+              except Exception as e: print(name,'ERROR',repr(e))
+          PY
       - name: Build installable debug APK
         run: gradle --no-daemon --stacktrace -p oshoworld :app:assembleDebug
       - name: Upload OSHO World APK
