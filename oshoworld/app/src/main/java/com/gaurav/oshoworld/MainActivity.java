@@ -216,6 +216,7 @@ public final class MainActivity extends Activity {
         catalogText.setText(tracks.size()+" catalog recordings · Hindi + English");
     }
     private void confirmAll(){
+        if(busy){Toast.makeText(this,"Catalog is still loading. Please use Download all after the refresh finishes.",Toast.LENGTH_LONG).show();return;}
         new AlertDialog.Builder(this).setTitle("Download the entire collection?")
             .setMessage("Both Hindi and English MP3 recordings will be queued. This may require hundreds of GB of storage and many hours. Android limits how long bulk downloads can run in the background; tap Resume to continue later. Wi-Fi is recommended.")
             .setPositiveButton("Queue all",(d,w)->queueTracks(tracks))
@@ -237,7 +238,9 @@ public final class MainActivity extends Activity {
         catalogText.setText("Refreshing remote catalog…");
         new Thread(()->{
             try{
-                ArrayList<Track> result=Catalog.refresh(this);
+                ArrayList<Track> result=Catalog.refresh(this,(found,done,total,latest)->runOnUiThread(()->{
+                    catalogText.setText("Loading official OSHO catalog: "+done+"/"+total+" series · "+found+" MP3s");
+                }));
                 runOnUiThread(()->{
                     tracks=result;busy=false;updateList();
                     Toast.makeText(this,"Catalog loaded: "+tracks.size()+" MP3 links",Toast.LENGTH_LONG).show();
