@@ -32,14 +32,21 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(0);
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},110);
-        tracks=Catalog.load(this);
+        // Never parse thousands of catalog entries on Android's main thread.
         buildUi();
         updateList();
         poller=new Runnable(){
-            @Override public void run(){refreshCounters();handler.postDelayed(this,1600);}
+            @Override public void run(){refreshCounters();handler.postDelayed(this,3000);}
         };
         handler.post(poller);
-        if(tracks.size()<=2)fetchCatalog();
+        new Thread(()->{
+            ArrayList<Track> cached=Catalog.load(getApplicationContext());
+            runOnUiThread(()->{
+                tracks=cached;updateList();
+                if(cached.size()<=1)
+                    catalogText.setText("Tap Refresh catalog to discover Hindi + English recordings");
+            });
+        },"OSHO-load-local-catalog").start();
     }
     private int dp(float n){return (int)(getResources().getDisplayMetrics().density*n+.5f);}
     private GradientDrawable background(int color,float radius){
@@ -97,12 +104,8 @@ public final class MainActivity extends Activity {
             Intent i=new Intent(this,DownloadService.class).setAction(DownloadService.PAUSE);startService(i);
             Toast.makeText(this,"Download pause requested",Toast.LENGTH_SHORT).show();
         });
-        resume.setOnClickListener(v->{
-            if(DownloadService.readQueue(this).isEmpty()){
-                Toast.makeText(this,"No unfinished downloads",Toast.LENGTH_SHORT).show();return;
-            }
-            startDownloads();
-        });
+        // The service checks the queue on its worker thread; do not parse it on UI.
+        resume.setOnClickListener(v->startDownloads());
         LinearLayout toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);
         Button refresh=button("⟳  Refresh catalog",false);
         Button importUrls=button("+  Import MP3 links",false);
@@ -111,6 +114,25 @@ public final class MainActivity extends Activity {
         toolp.setMargins(0,dp(10),0,dp(8));root.addView(toolbar,toolp);
         refresh.setOnClickListener(v->fetchCatalog());
         importUrls.setOnClickListener(v->showImport());
+
+        LinearLayout filesRow=new LinearLayout(this);
+        Button downloaded=button("▶  My Downloads & Play",true);
+        Button lastPlay=button("♫  Play last",false);
+        rowAdd(filesRow,downloaded,2,46);rowAdd(filesRow,lastPlay,1,46);
+        LinearLayout.LayoutParams filesP=new LinearLayout.LayoutParams(-1,dp(48));
+        filesP.setMargins(0,dp(6),0,dp(9));root.addView(filesRow,filesP);
+        downloaded.setOnClickListener(v->startActivity(new Intent(this,DownloadedActivity.class)));
+        lastPlay.setOnClickListener(v->{
+            String uri=getSharedPreferences("playback",MODE_PRIVATE).getString("uri","");
+            String title=getSharedPreferences("playback",MODE_PRIVATE).getString("title","OSHO Discourse");
+            if(uri.isEmpty()){
+                startActivity(new Intent(this,DownloadedActivity.class));
+                return;
+            }
+            Intent intent=new Intent(this,PlayerService.class).setAction(PlayerService.PLAY);
+            intent.putExtra("uri",uri);intent.putExtra("title",title);
+            startForegroundService(intent);
+        });
         LinearLayout langs=new LinearLayout(this);
         for(String l:new String[]{"All","Hindi","English","Other"}){
             Button b=button(l,l.equals(filter));b.setTextSize(12);
@@ -217,17 +239,33 @@ public final class MainActivity extends Activity {
     }
     private void confirmAll(){
         if(busy){Toast.makeText(this,"Catalog is still loading. Please use Download all after the refresh finishes.",Toast.LENGTH_LONG).show();return;}
+        if(tracks.size()<5){
+            new AlertDialog.Builder(this).setTitle("Load the catalog first")
+                .setMessage("The Hindi and English audio catalog has not loaded yet. Tap Refresh catalog and wait for the series counter to finish.")
+                .setPositiveButton("Refresh", (d,w)->fetchCatalog())
+                .setNegativeButton("Cancel",null).show();
+            return;
+        }
         new AlertDialog.Builder(this).setTitle("Download the entire collection?")
             .setMessage("Both Hindi and English MP3 recordings will be queued. This may require hundreds of GB of storage and many hours. Android limits how long bulk downloads can run in the background; tap Resume to continue later. Wi-Fi is recommended.")
             .setPositiveButton("Queue all",(d,w)->queueTracks(tracks))
             .setNegativeButton("Cancel",null).show();
     }
     private void queueTracks(Collection<Track> list){
-        try{
-            DownloadService.writeQueue(this,list);
-            startDownloads();
-            Toast.makeText(this,"Queued "+list.size()+" recordings",Toast.LENGTH_LONG).show();
-        }catch(Exception e){Toast.makeText(this,"Could not prepare downloads: "+e.getMessage(),Toast.LENGTH_LONG).show();}
+        ArrayList<Track> items=new ArrayList<>(list);
+        if(items.isEmpty()){Toast.makeText(this,"Nothing selected",Toast.LENGTH_SHORT).show();return;}
+        stateText.setText("Preparing "+items.size()+" downloads…");
+        new Thread(()->{
+            try{
+                DownloadService.writeQueue(getApplicationContext(),items);
+                runOnUiThread(()->{
+                    startDownloads();
+                    Toast.makeText(this,"Queued "+items.size()+" recordings",Toast.LENGTH_LONG).show();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->Toast.makeText(this,"Could not queue downloads: "+e.getMessage(),Toast.LENGTH_LONG).show());
+            }
+        },"OSHO-write-download-queue").start();
     }
     private void startDownloads(){
         Intent i=new Intent(this,DownloadService.class).setAction(DownloadService.START);
@@ -272,9 +310,10 @@ public final class MainActivity extends Activity {
     private void refreshCounters(){
         if(stateText==null)return;
         android.content.SharedPreferences prefs=getSharedPreferences("download_state",MODE_PRIVATE);
-        String state=prefs.getString("state","Ready to download");
-        int done=DownloadService.readFinished(this).size();
-        int pending=DownloadService.readQueue(this).size();
+        String state=prefs.getString("state","Ready · files in Music/OSHO World");
+        // Cached counters avoid repeatedly reading huge JSON queue files on UI.
+        int done=prefs.getInt("total_done",0);
+        int pending=prefs.getInt("pending_count",0);
         int failed=prefs.getInt("failed",0);
         stateText.setText(done+" downloaded · "+pending+" pending · "+failed+" failed\n"+state);
         nowText.setText("♫  "+getSharedPreferences("playback",MODE_PRIVATE).getString("title","Background MP3 player"));
