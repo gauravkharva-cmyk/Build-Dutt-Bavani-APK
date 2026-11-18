@@ -122,16 +122,28 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams filesP=new LinearLayout.LayoutParams(-1,dp(48));
         filesP.setMargins(0,dp(6),0,dp(9));root.addView(filesRow,filesP);
         downloaded.setOnClickListener(v->startActivity(new Intent(this,DownloadedActivity.class)));
+        lastPlay.setText("♫ Resume audio");
         lastPlay.setOnClickListener(v->{
             String uri=getSharedPreferences("playback",MODE_PRIVATE).getString("uri","");
-            String lastTitle=getSharedPreferences("playback",MODE_PRIVATE).getString("title","OSHO Discourse");
             if(uri.isEmpty()){
                 startActivity(new Intent(this,DownloadedActivity.class));
                 return;
             }
-            Intent intent=new Intent(this,PlayerService.class).setAction(PlayerService.PLAY);
-            intent.putExtra("uri",uri);intent.putExtra("title",lastTitle);
-            startForegroundService(intent);
+            // Resume the existing foreground player. Never recreate the active track.
+            playerCommand(PlayerService.RESUME);
+        });
+        Button battery=button("⚙ Keep playing in background · battery settings",false);
+        LinearLayout.LayoutParams batteryP=new LinearLayout.LayoutParams(-1,dp(39));
+        batteryP.setMargins(dp(3),dp(2),dp(3),dp(6));root.addView(battery,batteryP);
+        battery.setOnClickListener(v->{
+            new AlertDialog.Builder(this).setTitle("Keep OSHO playing in other apps")
+                .setMessage("The player is independent of this screen and uses a foreground audio notification. On some Lenovo devices, enable Unrestricted battery/background activity for this app. Android will still pause or duck audio if another app starts competing audio playback.")
+                .setPositiveButton("Open app settings",(dialog,which)->{
+                    Intent settings=new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:"+getPackageName()));
+                    startActivity(settings);
+                })
+                .setNegativeButton("Cancel",null).show();
         });
         LinearLayout langs=new LinearLayout(this);
         for(String l:new String[]{"All","Hindi","English","Other"}){
@@ -307,6 +319,14 @@ public final class MainActivity extends Activity {
                 Toast.makeText(this,"Imported "+imported.size()+" links",Toast.LENGTH_LONG).show();
             }).setNegativeButton("Cancel",null).show();
     }
+    private static String timeLabel(int milliseconds){
+        int seconds=Math.max(0,milliseconds/1000);
+        int hours=seconds/3600;
+        int minutes=(seconds%3600)/60;
+        int rest=seconds%60;
+        if(hours>0)return String.format(java.util.Locale.ROOT,"%d:%02d:%02d",hours,minutes,rest);
+        return String.format(java.util.Locale.ROOT,"%02d:%02d",minutes,rest);
+    }
     private void refreshCounters(){
         if(stateText==null)return;
         android.content.SharedPreferences prefs=getSharedPreferences("download_state",MODE_PRIVATE);
@@ -316,7 +336,10 @@ public final class MainActivity extends Activity {
         int pending=prefs.getInt("pending_count",0);
         int failed=prefs.getInt("failed",0);
         stateText.setText(done+" downloaded · "+pending+" pending · "+failed+" failed\n"+state);
-        nowText.setText("♫  "+getSharedPreferences("playback",MODE_PRIVATE).getString("title","Background MP3 player"));
+        android.content.SharedPreferences playback=getSharedPreferences("playback",MODE_PRIVATE);
+        int pos=playback.getInt("position",0);
+        String track=playback.getString("title","Background MP3 player");
+        nowText.setText("♫ "+track+" · "+timeLabel(pos)+" · "+(playback.getBoolean("playing",false)?"Playing":"Resume available"));
     }
     @Override public void onDestroy(){
         if(poller!=null)handler.removeCallbacks(poller);
