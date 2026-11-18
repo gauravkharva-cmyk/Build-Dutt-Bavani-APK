@@ -26,3 +26,14 @@ From `oshoworld/`: `gradle assembleDebug`.
 GitHub Actions artifact: `OSHO-World-Premium-APK`.
 
 Built for personal use by Gaurav Kharva.
+
+## Version 1.2.0 background player fixes
+- Foreground media playback continues when the screen is locked or you switch to ordinary apps.
+- Per-recording saved position, updated every 2 seconds and immediately on pause.
+- Play/Resume for a currently selected recording no longer resets playback to the beginning.
+- Playback history is restored after restarting the application.
+- Explicit Resume Audio button and saved position in My Downloads.
+- Partial wake-lock keeps the CPU active while MediaPlayer plays with the screen off.
+- Battery/background settings shortcut for Lenovo and other Android devices.
+- New v3 application ID: installs alongside v2 because each GitHub Actions debug APK may have a different signing certificate. In v3, open My Downloads and scan the public Music/OSHO World folder to find your previously saved MP3s. Saved playback progress from v2 cannot automatically migrate to v3.
+- As required by Android audio-focus rules, another app that starts playing audio may pause or duck OSHO playback; switching to apps that don't play audio should not stop it.
