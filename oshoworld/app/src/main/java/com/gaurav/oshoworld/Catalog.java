@@ -136,7 +136,7 @@ final class Catalog {
             int status=c.getResponseCode();
             if(status!=200)throw new IOException("HTTP "+status);
             if(c.getContentLengthLong()>12*1024*1024)throw new IOException("Catalog too large");
-            try(InputStream in=c.getInputStream())return read(in);
+            try(InputStream in=c.getInputStream()){return read(in);}
         } finally {c.disconnect();}
     }
     private static String read(InputStream in) throws IOException {
