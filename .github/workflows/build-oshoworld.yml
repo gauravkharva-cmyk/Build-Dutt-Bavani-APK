@@ -32,30 +32,38 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Inspect public catalog repositories
+      - name: Check official OSHO World audio API
         continue-on-error: true
         run: |
           python3 - <<'PY'
-          import json,urllib.request
-          targets=['aagrawal207/OshoDiscourses','mksonkar/oshoworld-discourse-downloader','SurjitSahoo/oshoworld-discourse-downloader']
-          for repo in targets:
+          import json,urllib.request,re
+          base='https://oshoworld.com'
+          H={'User-Agent':'Mozilla/5.0','Accept':'application/json','Content-Type':'application/json'}
+          def post(path,payload):
+              req=urllib.request.Request(base+path,method='POST',headers=H,data=json.dumps(payload).encode())
+              return json.load(urllib.request.urlopen(req,timeout=20))
+          try:
+              page=urllib.request.urlopen(urllib.request.Request(base,headers=H),timeout=20).read().decode()
+              b=re.search(r'"buildId":"([^"]+)"',page)
+              print('BUILD ID',b.group(1) if b else 'missing')
+          except Exception as e: print('BUILD ID error',repr(e));b=None
+          for lang in ['english','hindi']:
               try:
-                  req=urllib.request.Request('https://api.github.com/repos/'+repo,headers={'User-Agent':'OSHO-Android-Build'})
-                  j=json.load(urllib.request.urlopen(req,timeout=15))
-                  print('REPO',repo,'DEFAULT',j.get('default_branch'),'PRIVATE',j.get('private'))
-                  branch=j['default_branch']
-                  req=urllib.request.Request('https://api.github.com/repos/'+repo+'/git/trees/'+branch+'?recursive=1',headers={'User-Agent':'OSHO-Android-Build'})
-                  t=json.load(urllib.request.urlopen(req,timeout=15))
-                  paths=[x.get('path','') for x in t.get('tree',[])]
-                  print('CATALOG PATHS',[p for p in paths if 'catalog' in p.lower() or 'download' in p.lower()][:35])
-                  if 'mksonkar' in repo:
-                      path='downloader.py'
-                      s=urllib.request.urlopen('https://raw.githubusercontent.com/'+repo+'/'+branch+'/'+path,timeout=15).read().decode()
-                      lines=s.splitlines()
-                      for i,line in enumerate(lines):
-                          if any(v in line.lower() for v in ['endpoint','api/','get_audios','get-series','requests.get','audio-english-home','audio-hindi-home','base_url']):
-                              print('CODE',i+1,line.strip()[:200])
-              except Exception as e: print('REPO ERROR',repo,repr(e))
+                  j=post('/api/server/audio/search-series-home',{'page':1,'sortBy':'name','language':lang})
+                  print('SERIES',lang,'keys',list(j),'count',j.get('total'),'first',j.get('items',[])[:1])
+                  s=j.get('items',[])[0]
+                  print('SERIES ITEM KEYS',list(s))
+                  if b:
+                      slug=s.get('slug')
+                      u=base+'/_next/data/'+b.group(1)+'/'+slug+'.json'
+                      page=json.load(urllib.request.urlopen(urllib.request.Request(u,headers=H),timeout=20))
+                      pd=page['pageProps']['data']['pageData']
+                      print('PAGE DATA',lang,'keys',list(pd),'CATEGORY',pd.get('categoryData',{}).get('_id'))
+                      sid=pd.get('categoryData',{}).get('_id')
+                      if sid:
+                          eps=post('/api/server/audio/series-filter',{'currentId':sid,'page':1,'perPage':10,'search':''})
+                          print('EPISODES',lang,'total',eps.get('total'),'first',eps.get('listData',[])[:1])
+              except Exception as e:print('SERIES ERROR',lang,repr(e))
           PY
       - name: Build installable debug APK
         run: gradle --no-daemon --stacktrace -p oshoworld :app:assembleDebug
