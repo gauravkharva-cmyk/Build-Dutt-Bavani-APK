@@ -11,171 +11,362 @@ import android.os.*;
 import org.json.JSONObject;
 import java.util.ArrayList;
 
+/**
+ * Independent foreground media service. Activity lifecycle changes must not stop audio.
+ * Positions are stored per URI so a recording resumes after pause, app switches, or process recreation.
+ */
 public final class PlayerService extends Service {
     static final String PLAY="com.gaurav.oshoworld.PLAY";
+    static final String RESUME="com.gaurav.oshoworld.RESUME";
     static final String TOGGLE="com.gaurav.oshoworld.TOGGLE";
     static final String NEXT="com.gaurav.oshoworld.NEXT";
     static final String PREV="com.gaurav.oshoworld.PREV";
-    private MediaPlayer mediaPlayer;
-    private MediaSession session;
+    static final String SEEK="com.gaurav.oshoworld.SEEK";
+    static final String STOP="com.gaurav.oshoworld.STOP";
+    private static final int PLAYER_NOTIFICATION=2202;
+    private static final String CHANNEL="osho_playback";
+
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private MediaPlayer player;
+    private MediaSession mediaSession;
     private AudioManager audio;
+    private AudioFocusRequest focusRequest;
+    private AudioManager.OnAudioFocusChangeListener focusListener;
     private String currentUri="",currentTitle="OSHO Discourse";
-    private boolean prepared=false;
-    private final Handler ticker=new Handler(Looper.getMainLooper());
-    private AudioManager.OnAudioFocusChangeListener focus;
+    private boolean prepared=false, preparing=false, playWhenPrepared=false, resumeAfterFocus=false;
+    private int generation=0;
+    private final Runnable saveProgress=new Runnable(){
+        @Override public void run(){
+            try {
+                if(prepared && player!=null)persistPosition(player.isPlaying());
+            } catch(Exception ignored){}
+            handler.postDelayed(this,2000);
+        }
+    };
+
+    private android.content.SharedPreferences prefs(){
+        return getSharedPreferences("playback",MODE_PRIVATE);
+    }
+    private String positionKey(String uri) {
+        return "position_"+Integer.toHexString(uri.hashCode());
+    }
+    private int savedPosition(String uri){
+        int fallback=uri.equals(prefs().getString("uri",""))?prefs().getInt("position",0):0;
+        return Math.max(0,prefs().getInt(positionKey(uri),fallback));
+    }
+    private void persistPosition(boolean playing){
+        if(currentUri.isEmpty())return;
+        int position=savedPosition(currentUri);
+        try {
+            if(prepared && player!=null)position=Math.max(0,player.getCurrentPosition());
+        }catch(Exception ignored){}
+        prefs().edit().putString("uri",currentUri).putString("title",currentTitle)
+            .putInt("position",position).putInt(positionKey(currentUri),position)
+            .putBoolean("playing",playing).putBoolean("wantPlaying",playing).apply();
+    }
+    private void onFocusChanged(int change){
+        if(change==AudioManager.AUDIOFOCUS_GAIN){
+            if(player!=null)try{player.setVolume(1f,1f);}catch(Exception ignored){}
+            if(resumeAfterFocus){
+                resumeAfterFocus=false;
+                resumePlayback();
+            }
+        }else if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT){
+            boolean wasPlaying=isPlaying();
+            resumeAfterFocus=wasPlaying;
+            pausePlayback(true);
+        }else if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){
+            if(player!=null)try{player.setVolume(.2f,.2f);}catch(Exception ignored){}
+        }else if(change==AudioManager.AUDIOFOCUS_LOSS){
+            resumeAfterFocus=false;
+            pausePlayback(true);
+        }
+    }
     @Override public void onCreate(){
         super.onCreate();
-        NotificationManager n=getSystemService(NotificationManager.class);
-        n.createNotificationChannel(new NotificationChannel("osho_playback","OSHO background audio",NotificationManager.IMPORTANCE_LOW));
+        NotificationManager manager=getSystemService(NotificationManager.class);
+        NotificationChannel channel=new NotificationChannel(CHANNEL,"OSHO background music",NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Playback keeps running when another app is open or the screen is locked");
+        manager.createNotificationChannel(channel);
         audio=(AudioManager)getSystemService(AUDIO_SERVICE);
-        session=new MediaSession(this,"OSHO Premium Player");
-        session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS|MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
-        session.setCallback(new MediaSession.Callback(){
-            @Override public void onPlay(){resume();}
-            @Override public void onPause(){pause();}
+        focusListener=this::onFocusChanged;
+        AudioAttributes attributes=new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
+        if(Build.VERSION.SDK_INT>=26){
+            focusRequest=new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attributes)
+                .setOnAudioFocusChangeListener(focusListener,handler)
+                .setAcceptsDelayedFocusGain(false)
+                .build();
+        }
+        currentUri=prefs().getString("uri","");
+        currentTitle=prefs().getString("title","OSHO Discourse");
+        mediaSession=new MediaSession(this,"OSHO World Player");
+        mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS
+            |MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession.setCallback(new MediaSession.Callback(){
+            @Override public void onPlay(){resumeFromLast();}
+            @Override public void onPause(){pausePlayback(false);}
+            @Override public void onStop(){pausePlayback(false);stopSelf();}
             @Override public void onSkipToNext(){skip(1);}
             @Override public void onSkipToPrevious(){skip(-1);}
-            @Override public void onSeekTo(long pos){if(prepared&&mediaPlayer!=null)mediaPlayer.seekTo((int)pos);}
-            @Override public void onStop(){pause();stopSelf();}
-        });
-        session.setActive(true);
-        focus=change -> {
-            if(change==AudioManager.AUDIOFOCUS_LOSS||change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)pause();
-            else if(change==AudioManager.AUDIOFOCUS_GAIN&&mediaPlayer!=null&&prepared)resume();
-            else if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK&&mediaPlayer!=null)mediaPlayer.setVolume(.25f,.25f);
-        };
-        currentUri=getSharedPreferences("playback",MODE_PRIVATE).getString("uri","");
-        currentTitle=getSharedPreferences("playback",MODE_PRIVATE).getString("title","OSHO Discourse");
-        ticker.postDelayed(new Runnable(){
-            @Override public void run(){
-                if(prepared&&mediaPlayer!=null) {
-                    try{
-                        getSharedPreferences("playback",MODE_PRIVATE).edit()
-                            .putInt("position",mediaPlayer.getCurrentPosition())
-                            .putBoolean("playing",mediaPlayer.isPlaying()).apply();
-                    }catch(Exception ignored){}
-                }
-                ticker.postDelayed(this,4000);
-            }
-        },4000);
+            @Override public void onSeekTo(long position){seekTo((int)position);}
+        },handler);
+        mediaSession.setActive(true);
+        handler.postDelayed(saveProgress,2000);
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        String action=intent==null?TOGGLE:intent.getAction();
+        if(intent==null){
+            // START_STICKY after the OS reclaimed this foreground service.
+            if(prefs().getBoolean("wantPlaying",false))resumeFromLast();
+            else updateNotification();
+            return START_STICKY;
+        }
+        String action=intent.getAction();
         if(PLAY.equals(action)){
             String uri=intent.getStringExtra("uri");
             String title=intent.getStringExtra("title");
-            if(uri!=null&&!uri.isEmpty())startTrack(uri,title==null?"OSHO Discourse":title);
-        }else if(NEXT.equals(action))skip(1);
-        else if(PREV.equals(action))skip(-1);
-        else if(TOGGLE.equals(action)){
-            if(mediaPlayer!=null&&prepared&&mediaPlayer.isPlaying())pause();
-            else if(mediaPlayer!=null&&prepared)resume();
-            else if(!currentUri.isEmpty())startTrack(currentUri,currentTitle);
-        }
-        updateNotice();
+            if(uri!=null&&!uri.isEmpty())playTrack(uri,title==null?"OSHO Discourse":title);
+        }else if(RESUME.equals(action)){
+            resumeFromLast();
+        }else if(TOGGLE.equals(action)){
+            if(isPlaying())pausePlayback(false);
+            else resumeFromLast();
+        }else if(NEXT.equals(action)){skip(1);}
+        else if(PREV.equals(action)){skip(-1);}
+        else if(SEEK.equals(action)){seekTo(intent.getIntExtra("position",0));}
+        else if(STOP.equals(action)){pausePlayback(false);stopSelf();}
+        else {updateNotification();}
         return START_STICKY;
     }
-    private void startTrack(String uri,String title){
-        try {
-            boolean restore=uri.equals(currentUri);
-            releasePlayer();
-            currentUri=uri;currentTitle=title;
-            int saved=restore?getSharedPreferences("playback",MODE_PRIVATE).getInt("position",0):0;
-            getSharedPreferences("playback",MODE_PRIVATE).edit()
-                .putString("uri",uri).putString("title",title)
-                .putInt("position",saved).apply();
-            mediaPlayer=new MediaPlayer();
-            mediaPlayer.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+    private boolean isPlaying(){
+        try{return prepared&&player!=null&&player.isPlaying();}
+        catch(Exception ignored){return false;}
+    }
+    private void resumeFromLast(){
+        if(isPlaying())return;
+        if(prepared && player!=null){resumePlayback();return;}
+        if(preparing && player!=null){playWhenPrepared=true;return;}
+        if(!currentUri.isEmpty())playTrack(currentUri,currentTitle);
+    }
+    private void playTrack(String uri,String title){
+        if(uri.equals(currentUri) && player!=null){
+            currentTitle=title;
+            if(prepared){resumePlayback();return;}
+            if(preparing){playWhenPrepared=true;updateNotification();return;}
+        }
+        if(!uri.equals(currentUri))persistPosition(isPlaying());
+        releasePlayer();
+        currentUri=uri;currentTitle=title;
+        final int requestedPosition=savedPosition(uri);
+        final int playGeneration=++generation;
+        preparing=true;prepared=false;playWhenPrepared=true;
+        prefs().edit().putString("uri",uri).putString("title",title)
+            .putInt("position",requestedPosition)
+            .putBoolean("wantPlaying",true).apply();
+        try{
+            MediaPlayer mp=new MediaPlayer();
+            player=mp;
+            mp.setWakeMode(getApplicationContext(),PowerManager.PARTIAL_WAKE_LOCK);
+            mp.setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
-            mediaPlayer.setDataSource(this,Uri.parse(uri));
-            mediaPlayer.setOnPreparedListener(p -> {
-                prepared=true;
-                if(saved>0)p.seekTo(saved);
-                resume();
+            mp.setDataSource(this,Uri.parse(uri));
+            mp.setOnPreparedListener(p->{
+                if(playGeneration!=generation||p!=player)return;
+                preparing=false;prepared=true;
+                try{
+                    int duration=p.getDuration();
+                    int restore=requestedPosition;
+                    if(duration>0 && restore>duration-2000)restore=0;
+                    updateMetadata(duration);
+                    if(restore>0){
+                        final int offset=restore;
+                        p.setOnSeekCompleteListener(ready->{
+                            if(playGeneration!=generation||ready!=player)return;
+                            p.setOnSeekCompleteListener(null);
+                            if(playWhenPrepared)resumePlayback();
+                            else updateNotification();
+                        });
+                        p.seekTo(offset,MediaPlayer.SEEK_CLOSEST);
+                        updateNotification();
+                    }else if(playWhenPrepared)resumePlayback();
+                    else updateNotification();
+                }catch(Exception ex){if(playWhenPrepared)resumePlayback();}
             });
-            mediaPlayer.setOnCompletionListener(p -> {
-                getSharedPreferences("playback",MODE_PRIVATE).edit().putInt("position",0).apply();
+            mp.setOnCompletionListener(p->{
+                if(playGeneration!=generation)return;
+                prefs().edit().putInt(positionKey(currentUri),0).putInt("position",0).apply();
+                // Avoid saving the completed end-position when releasing the track.
+                prepared=false;
                 skip(1);
             });
-            mediaPlayer.setOnErrorListener((p,what,extra)->{
-                prepared=false;updateNotice();return false;
+            mp.setOnErrorListener((p,what,extra)->{
+                if(playGeneration==generation){
+                    persistPosition(false);
+                    preparing=false;prepared=false;
+                    updateNotification();
+                }
+                return true;
             });
-            mediaPlayer.prepareAsync();
-        }catch(Exception ex){
-            prepared=false;
-            getSharedPreferences("playback",MODE_PRIVATE).edit().putBoolean("playing",false).apply();
+            // startForeground is called before asynchronous preparation, keeping the service active
+            updateNotification();
+            mp.prepareAsync();
+        }catch(Exception e){
+            preparing=false;prepared=false;playWhenPrepared=false;
+            persistPosition(false);
+            updateNotification();
         }
     }
-    private void resume(){
+    private boolean requestFocus(){
+        if(audio==null)return true;
         try{
-            if(!prepared||mediaPlayer==null)return;
-            audio.requestAudioFocus(focus,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
-            mediaPlayer.setVolume(1f,1f);
-            mediaPlayer.start();
-            float speed=getSharedPreferences("playback",MODE_PRIVATE).getFloat("speed",1f);
-            mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(speed));
-            updateNotice();
+            int result=Build.VERSION.SDK_INT>=26
+                ?audio.requestAudioFocus(focusRequest)
+                :audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
+            return result==AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        }catch(Exception ignored){return false;}
+    }
+    private void resumePlayback(){
+        if(!prepared||player==null)return;
+        if(isPlaying()){updateNotification();return;}
+        playWhenPrepared=true;
+        resumeAfterFocus=false;
+        if(!requestFocus()){
+            // Respect another active media app. Ordinary app switching does not take audio focus.
+            updateNotification();
+            return;
+        }
+        try{
+            player.setVolume(1f,1f);
+            player.start();
+            float speed=prefs().getFloat("speed",1f);
+            if(Build.VERSION.SDK_INT>=23)
+                player.setPlaybackParams(player.getPlaybackParams().setSpeed(speed));
+            persistPosition(true);
+        }catch(Exception ignored){persistPosition(false);}
+        updateNotification();
+    }
+    private void pausePlayback(boolean focusPause){
+        if(!focusPause)resumeAfterFocus=false;
+        playWhenPrepared=false;
+        if(prepared&&player!=null){
+            try {if(player.isPlaying())player.pause();}catch(Exception ignored){}
+        }
+        persistPosition(false); // Save immediately, not just on the periodic timer.
+        updateNotification();
+    }
+    private void seekTo(int position){
+        if(!prepared||player==null)return;
+        try{
+            int duration=player.getDuration();
+            int target=Math.max(0,duration>0?Math.min(position,duration):position);
+            player.seekTo(target);
+            prefs().edit().putInt(positionKey(currentUri),target)
+                .putInt("position",target).apply();
+            updateNotification();
         }catch(Exception ignored){}
     }
-    private void pause(){
-        if(prepared&&mediaPlayer!=null){
-            try{if(mediaPlayer.isPlaying())mediaPlayer.pause();}catch(Exception ignored){}
-        }
-        updateNotice();
-    }
-    private void skip(int d){
-        ArrayList<JSONObject> a=DownloadService.readFinished(this);
-        if(a.isEmpty())return;
-        int index=-1;
-        for(int i=0;i<a.size();i++)if(currentUri.equals(a.get(i).optString("uri"))){index=i;break;}
-        int newIndex=index<0?(d>0?0:a.size()-1):(index+d+a.size())%a.size();
-        JSONObject item=a.get(newIndex);
-        startTrack(item.optString("uri"),item.optString("title","OSHO Discourse"));
+    private void skip(int delta){
+        final String from=currentUri;
+        final int token=generation;
+        new Thread(()->{
+            ArrayList<JSONObject> list=DownloadService.readFinished(getApplicationContext());
+            handler.post(()->{
+                if(token!=generation || !from.equals(currentUri) || list.isEmpty())return;
+                int index=-1;
+                for(int i=0;i<list.size();i++){
+                    if(from.equals(list.get(i).optString("uri"))){index=i;break;}
+                }
+                int next=index<0?(delta>0?0:list.size()-1)
+                    :(index+delta+list.size())%list.size();
+                JSONObject entry=list.get(next);
+                String uri=entry.optString("uri","");
+                if(!uri.isEmpty()){
+                    // Preserve the old track position unless it has completed.
+                    playTrack(uri,entry.optString("title","OSHO Discourse"));
+                }
+            });
+        },"OSHO-find-next-audio").start();
     }
     private PendingIntent command(String action,int requestCode){
-        Intent i=new Intent(this,PlayerService.class).setAction(action);
-        return PendingIntent.getService(this,requestCode,i,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Intent intent=new Intent(this,PlayerService.class).setAction(action);
+        return PendingIntent.getService(this,requestCode,intent,
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
-    private void updateNotice(){
-        if(currentUri.isEmpty())return;
-        boolean playing=false;
-        try{playing=prepared&&mediaPlayer!=null&&mediaPlayer.isPlaying();}catch(Exception ignored){}
-        Intent i=new Intent(this,MainActivity.class);
-        PendingIntent open=PendingIntent.getActivity(this,0,i,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder b=new Notification.Builder(this,"osho_playback")
-            .setContentTitle(currentTitle).setContentText("OSHO World · background audio")
-            .setSmallIcon(android.R.drawable.ic_media_play).setContentIntent(open)
-            .setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PUBLIC)
-            .addAction(android.R.drawable.ic_media_previous,"Previous",command(PREV,1))
-            .addAction(playing?android.R.drawable.ic_media_pause:android.R.drawable.ic_media_play,
-                playing?"Pause":"Play",command(TOGGLE,2))
-            .addAction(android.R.drawable.ic_media_next,"Next",command(NEXT,3))
-            .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0,1,2));
-        if(Build.VERSION.SDK_INT>=29)startForeground(2202,b.build(),ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-        else startForeground(2202,b.build());
-        long position=0;
-        if(prepared&&mediaPlayer!=null)try{position=mediaPlayer.getCurrentPosition();}catch(Exception ignored){}
-        session.setPlaybackState(new PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PLAY|PlaybackState.ACTION_PAUSE|
-                        PlaybackState.ACTION_PLAY_PAUSE|PlaybackState.ACTION_SKIP_TO_NEXT|
-                        PlaybackState.ACTION_SKIP_TO_PREVIOUS|PlaybackState.ACTION_SEEK_TO)
-            .setState(playing?PlaybackState.STATE_PLAYING:PlaybackState.STATE_PAUSED,position,playing?1f:0f)
-            .build());
-        session.setMetadata(new android.media.MediaMetadata.Builder()
+    private void updateMetadata(int duration){
+        if(mediaSession==null)return;
+        android.media.MediaMetadata.Builder metadata=new android.media.MediaMetadata.Builder()
             .putString(android.media.MediaMetadata.METADATA_KEY_TITLE,currentTitle)
             .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST,"OSHO")
-            .build());
+            .putString(android.media.MediaMetadata.METADATA_KEY_ALBUM,"OSHO World");
+        if(duration>0)metadata.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION,duration);
+        mediaSession.setMetadata(metadata.build());
+    }
+    private void updateNotification(){
+        if(currentUri.isEmpty()||mediaSession==null)return;
+        boolean playing=isPlaying();
+        Intent open=new Intent(this,MainActivity.class);
+        PendingIntent openIntent=PendingIntent.getActivity(this,0,open,
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification notification=new Notification.Builder(this,CHANNEL)
+            .setContentTitle(currentTitle)
+            .setContentText(playing?"Playing in the background":preparing?"Loading recording…":"Paused · tap Play to resume")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentIntent(openIntent)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setOngoing(playing)
+            .setOnlyAlertOnce(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .addAction(android.R.drawable.ic_media_previous,"Previous",command(PREV,1))
+            .addAction(playing?android.R.drawable.ic_media_pause:android.R.drawable.ic_media_play,
+                playing?"Pause":"Resume",command(TOGGLE,2))
+            .addAction(android.R.drawable.ic_media_next,"Next",command(NEXT,3))
+            .setStyle(new Notification.MediaStyle()
+                .setMediaSession(mediaSession.getSessionToken())
+                .setShowActionsInCompactView(0,1,2))
+            .build();
+        if(Build.VERSION.SDK_INT>=29)
+            startForeground(PLAYER_NOTIFICATION,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        else startForeground(PLAYER_NOTIFICATION,notification);
+        long position=savedPosition(currentUri);
+        if(prepared&&player!=null)try{position=player.getCurrentPosition();}catch(Exception ignored){}
+        int state=playing?PlaybackState.STATE_PLAYING:
+            preparing?PlaybackState.STATE_BUFFERING:PlaybackState.STATE_PAUSED;
+        mediaSession.setPlaybackState(new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PLAY|PlaybackState.ACTION_PAUSE
+                |PlaybackState.ACTION_PLAY_PAUSE|PlaybackState.ACTION_SEEK_TO
+                |PlaybackState.ACTION_SKIP_TO_NEXT|PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                |PlaybackState.ACTION_STOP)
+            .setState(state,position,playing?1f:0f).build());
+        updateMetadata(prepared&&player!=null?safeDuration():0);
+    }
+    private int safeDuration(){
+        try{return player.getDuration();}catch(Exception ignored){return 0;}
     }
     private void releasePlayer(){
-        prepared=false;
-        if(mediaPlayer!=null)try{mediaPlayer.reset();mediaPlayer.release();}catch(Exception ignored){}
-        mediaPlayer=null;
+        if(player!=null){
+            try{player.reset();player.release();}catch(Exception ignored){}
+            player=null;
+        }
+        prepared=false;preparing=false;playWhenPrepared=false;
+    }
+    @Override public void onTaskRemoved(Intent rootIntent){
+        // User switching apps or clearing the UI task must not stop the foreground player.
+        // Android can still reclaim the process, so progress is also periodically persisted.
     }
     @Override public void onDestroy(){
-        ticker.removeCallbacksAndMessages(null);
+        handler.removeCallbacks(saveProgress);
+        persistPosition(isPlaying());
         releasePlayer();
-        if(audio!=null&&focus!=null)audio.abandonAudioFocus(focus);
-        if(session!=null){session.setActive(false);session.release();}
+        if(audio!=null){
+            try{
+                if(Build.VERSION.SDK_INT>=26)audio.abandonAudioFocusRequest(focusRequest);
+                else audio.abandonAudioFocus(focusListener);
+            }catch(Exception ignored){}
+        }
+        if(mediaSession!=null){mediaSession.setActive(false);mediaSession.release();}
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
