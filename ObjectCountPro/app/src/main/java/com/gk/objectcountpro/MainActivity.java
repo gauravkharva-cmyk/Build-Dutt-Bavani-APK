@@ -62,20 +62,27 @@ public class MainActivity extends Activity {
     private DetectorEngine detector;
     private AnnotatedImageView preview;
     private TextView countLabel, statusLabel, hintLabel, confidenceLabel, breakdownLabel;
-    private Spinner categorySpinner;
+    private Spinner categorySpinner, modeSpinner, contrastSpinner;
     private ArrayAdapter<String> categoryAdapter;
     private Button markButton, saveButton, shareButton, resetButton;
     private Switch enhancedSwitch;
+    private SeekBar confidenceSeek;
+    private LinearLayout repeatedControls;
+    private TextView repeatSensitivityLabel, repeatSizeLabel;
+    private int countingMode = 0, contrastMode = 0;
+    private int repeatSensitivity = 58, repeatMinArea = 25;
+    private String analysisNotes = "Choose a photo and a counting method.";
 
     private Bitmap currentImage;
     private Uri cameraUri;
     private File temporaryCameraFile;
     private List<DetectorEngine.Hit> hits = new ArrayList<>();
     private final List<PointF> manualMarks = new ArrayList<>();
-    private float minConfidence = 0.30f;
+    private final List<String> manualClasses = new ArrayList<>();
+    private float minConfidence = 0.22f;
     private String selectedCategory = "All objects";
     private boolean isMarkMode = false;
-    private boolean enhanced = false;
+    private boolean enhanced = true;
     private int generation = 0;
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -139,6 +146,23 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    private ArrayAdapter<String> darkAdapter(String[] values) {
+        return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item,
+                java.util.Arrays.asList(values)) {
+            @Override public View getView(int position, View recycled, ViewGroup parent) {
+                TextView t = text(getItem(position), 15, WHITE, true);
+                t.setPadding(dp(12), dp(8), dp(12), dp(8));
+                return t;
+            }
+            @Override public View getDropDownView(int position, View recycled, ViewGroup parent) {
+                TextView t = text(getItem(position), 15, WHITE, false);
+                t.setBackgroundColor(0xFF26324D);
+                t.setPadding(dp(15), dp(14), dp(15), dp(14));
+                return t;
+            }
+        };
+    }
+
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -147,7 +171,7 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
 
-        TextView title = text("OBJECTCOUNT  PRO", 24, WHITE, true);
+        TextView title = text("OBJECTCOUNT  PRO 2", 24, WHITE, true);
         title.setLetterSpacing(0.07f);
         root.addView(title);
         TextView subtitle = text("OFFLINE AI IMAGE ANALYZER  •  ANDROID", 11, CYAN, true);
@@ -203,19 +227,33 @@ public class MainActivity extends Activity {
         TextView toolsHeader = text("DETECTION CONTROLS", 14, WHITE, true);
         toolsHeader.setLetterSpacing(0.08f);
         controls.addView(toolsHeader);
-        addGap(controls, 11);
+        addGap(controls, 14);
 
-        confidenceLabel = text("Minimum confidence  •  30%", 13, MUTED, false);
+        TextView modeHeading = text("HOW SHOULD ITEMS BE COUNTED?", 12, MUTED, true);
+        controls.addView(modeHeading);
+        modeSpinner = new Spinner(this);
+        modeSpinner.setAdapter(darkAdapter(new String[] {
+            "AI - common objects", "Repeated items - plain background"
+        }));
+        modeSpinner.setBackground(background(0xFF26324D, 12));
+        controls.addView(modeSpinner, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        TextView modeExplainer = text("AI recognizes common categories. For parts, coins, " +
+                "screws, or similar items, try Repeated items.", 12, MUTED, false);
+        controls.addView(modeExplainer);
+        addGap(controls, 14);
+
+        confidenceLabel = text("Minimum confidence  •  22%", 13, MUTED, false);
         controls.addView(confidenceLabel);
-        SeekBar seek = new SeekBar(this);
-        seek.setMax(70);
-        seek.setProgress(15);
-        seek.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
-        seek.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
-        controls.addView(seek);
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        confidenceSeek = new SeekBar(this);
+        confidenceSeek.setMax(85);
+        confidenceSeek.setProgress(17);
+        confidenceSeek.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        confidenceSeek.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        controls.addView(confidenceSeek);
+        confidenceSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s,int progress,boolean fromUser) {
-                minConfidence = (15 + progress) / 100f;
+                minConfidence = (5 + progress) / 100f;
                 confidenceLabel.setText("Minimum confidence  •  " + Math.round(minConfidence * 100) + "%");
                 if (currentImage != null) { updateCategoryChoices(); refreshView(); }
             }
@@ -255,19 +293,99 @@ public class MainActivity extends Activity {
         categoryAdapter.add("All objects");
 
         enhancedSwitch = new Switch(this);
-        enhancedSwitch.setText("Enhanced scan for small objects");
+        enhancedSwitch.setText("Precision mode: scan small objects in overlapping tiles");
         enhancedSwitch.setTextColor(WHITE);
         enhancedSwitch.setTextSize(13);
-        enhancedSwitch.setChecked(false);
+        enhancedSwitch.setChecked(true);
         controls.addView(enhancedSwitch);
         enhancedSwitch.setOnCheckedChangeListener((b, checked) -> {
             enhanced = checked;
-            if (currentImage != null) runDetection();
+            if (currentImage != null && countingMode == 0) runDetection();
         });
+
+        repeatedControls = vertical(7);
+        repeatedControls.setBackground(background(0xFF1C2942, 14));
+        TextView contrastHeading = text("BACKGROUND / OBJECT CONTRAST", 12, CYAN, true);
+        repeatedControls.addView(contrastHeading);
+        contrastSpinner = new Spinner(this);
+        contrastSpinner.setAdapter(darkAdapter(new String[] {
+            "Different color from background",
+            "Dark items on light background",
+            "Light items on dark background"
+        }));
+        contrastSpinner.setBackground(background(0xFF293B59, 12));
+        repeatedControls.addView(contrastSpinner, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        contrastSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                contrastMode = pos;
+                if (countingMode == 1 && currentImage != null) runDetection();
+            }
+            @Override public void onNothingSelected(AdapterView<?> p) {}
+        });
+
+        repeatSensitivityLabel = text("Color sensitivity: 58 / 100", 13, MUTED, false);
+        repeatedControls.addView(repeatSensitivityLabel);
+        SeekBar sensitivitySeek = new SeekBar(this);
+        sensitivitySeek.setMax(100);
+        sensitivitySeek.setProgress(repeatSensitivity);
+        repeatedControls.addView(sensitivitySeek);
+        sensitivitySeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                repeatSensitivity = progress;
+                repeatSensitivityLabel.setText("Color sensitivity: " + progress + " / 100");
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                if (countingMode == 1 && currentImage != null) runDetection();
+            }
+        });
+
+        repeatSizeLabel = text("Minimum item size: 25 / 100", 13, MUTED, false);
+        repeatedControls.addView(repeatSizeLabel);
+        SeekBar areaSeek = new SeekBar(this);
+        areaSeek.setMax(100);
+        areaSeek.setProgress(repeatMinArea);
+        repeatedControls.addView(areaSeek);
+        areaSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                repeatMinArea = progress;
+                repeatSizeLabel.setText("Minimum item size: " + progress + " / 100");
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                if (countingMode == 1 && currentImage != null) runDetection();
+            }
+        });
+
+        TextView repeatedHelp = text("Best for separate, similar items on a plain surface. " +
+                "Boxes are shapes, not object identities. A touching group may count as one. " +
+                "Increase minimum size if speckles get counted.", 12, MUTED, false);
+        repeatedControls.addView(repeatedHelp);
+        repeatedControls.setVisibility(View.GONE);
+        controls.addView(repeatedControls);
 
         breakdownLabel = text("No detections yet", 13, MUTED, false);
         breakdownLabel.setLineSpacing(dp(5), 1);
         controls.addView(breakdownLabel);
+        modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                if (countingMode == pos) return;
+                countingMode = pos;
+                repeatedControls.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+                enhancedSwitch.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+                confidenceLabel.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+                confidenceSeek.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+                hits.clear();
+                manualMarks.clear();
+                manualClasses.clear();
+                selectedCategory = "All objects";
+                updateCategoryChoices();
+                refreshView();
+                if (currentImage != null) runDetection();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
         root.addView(controls);
         addGap(root, 14);
 
@@ -291,6 +409,7 @@ public class MainActivity extends Activity {
         resetButton.setOnClickListener(v -> {
             for (DetectorEngine.Hit h : hits) h.excluded = false;
             manualMarks.clear();
+            manualClasses.clear();
             isMarkMode = false;
             markButton.setText("+  Mark missed");
             hintLabel.setText("Tap a detected box to exclude it from the count.");
@@ -315,7 +434,7 @@ public class MainActivity extends Activity {
         shareButton.setOnClickListener(v -> exportImage(true));
 
         addGap(root, 18);
-        TextView note = text("PRIVATE BY DESIGN • ALL IMAGE PROCESSING STAYS ON YOUR DEVICE", 11, MUTED, true);
+        TextView note = text("OFFLINE PROCESSING • PHOTOS STAY ON THIS DEVICE", 11, MUTED, true);
         note.setGravity(Gravity.CENTER);
         note.setLetterSpacing(0.04f);
         root.addView(note);
@@ -337,7 +456,7 @@ public class MainActivity extends Activity {
         try {
             temporaryCameraFile = File.createTempFile("objectcount_camera_", ".jpg", getCacheDir());
             cameraUri = FileProvider.getUriForFile(this,
-                    "com.gk.objectcountpro.provider", temporaryCameraFile);
+                    "com.gk.objectcountpro.v2.provider", temporaryCameraFile);
             Intent i = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             i.putExtra(MediaStore.EXTRA_OUTPUT, cameraUri);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
@@ -414,13 +533,16 @@ public class MainActivity extends Activity {
                     preview.setBitmap(currentImage);
                     hits.clear();
                     manualMarks.clear();
+                    manualClasses.clear();
                     selectedCategory = "All objects";
                     isMarkMode = false;
                     markButton.setText("+  Mark missed");
                     updateCategoryChoices();
                     refreshView();
                     runDetection();
-                    if (old != null && old != loaded) old.recycle();
+                    if (old != null && old != loaded) {
+                        executor.execute(() -> { if (!old.isRecycled()) old.recycle(); });
+                    }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -438,18 +560,35 @@ public class MainActivity extends Activity {
         final int job = ++generation;
         final Bitmap image = currentImage;
         final boolean useTiles = enhanced;
-        statusLabel.setText(useTiles ? "ENHANCED AI SCAN RUNNING…" : "AI SCAN RUNNING…");
+        final int currentMode = countingMode, contrast = contrastMode;
+        final int sensitivity = repeatSensitivity, minimumArea = repeatMinArea;
+        statusLabel.setText(currentMode == 1 ?
+                "COUNTING REPEATED ITEMS…" :
+                (useTiles ? "HIGH-PRECISION AI SCANNING…" : "AI SCANNING…"));
         statusLabel.setTextColor(PURPLE);
         saveButton.setEnabled(false);
         shareButton.setEnabled(false);
         executor.execute(() -> {
             try {
-                if (detector == null) detector = new DetectorEngine(getApplicationContext());
-                List<DetectorEngine.Hit> result = detector.analyze(image, useTiles);
+                final List<DetectorEngine.Hit> result;
+                final String details;
+                if (currentMode == 1) {
+                    RepeatedItemCounter.Result r = new RepeatedItemCounter()
+                            .analyze(image, contrast, sensitivity, minimumArea);
+                    result = r.hits;
+                    details = r.message;
+                } else {
+                    if (detector == null) detector = new DetectorEngine(getApplicationContext());
+                    result = detector.analyze(image, useTiles);
+                    details = "AI identifies trained categories only. Very small, dense, " +
+                            "unfamiliar, or partly hidden items can be missed. Try the " +
+                            "Repeated items mode for plain-background parts or coins.";
+                }
                 runOnUiThread(() -> {
                     if (job != generation || isFinishing()) return;
                     hits = result;
-                    statusLabel.setText("OFFLINE ANALYSIS COMPLETE");
+                    analysisNotes = details;
+                    statusLabel.setText("COUNT COMPLETE • VERIFY THE BOXES");
                     statusLabel.setTextColor(0xFF41E3AE);
                     updateCategoryChoices();
                     refreshView();
@@ -458,10 +597,10 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    if (job != generation) return;
-                    statusLabel.setText("DETECTION MODEL ERROR");
+                    if (job != generation || isFinishing()) return;
+                    statusLabel.setText("COUNTING ERROR");
                     statusLabel.setTextColor(0xFFFFA3A3);
-                    message("Detector could not run: " + e.getMessage());
+                    message("Could not analyze image: " + e.getMessage());
                 });
             }
         });
@@ -472,7 +611,7 @@ public class MainActivity extends Activity {
         Set<String> sorted = new TreeSet<>();
         for (DetectorEngine.Hit h : hits)
             if (h.score >= minConfidence && !h.excluded) sorted.add(h.label);
-        if (!manualMarks.isEmpty()) sorted.add("Manual");
+        sorted.addAll(manualClasses);
         List<String> options = new ArrayList<>();
         options.add("All objects");
         options.addAll(sorted);
@@ -489,13 +628,14 @@ public class MainActivity extends Activity {
         preview.setThreshold(minConfidence);
         preview.setSelectedClass(selectedCategory);
         preview.setManual(manualMarks);
+        preview.setManualClasses(manualClasses);
         Map<String,Integer> grouped = new LinkedHashMap<>();
         for (DetectorEngine.Hit h : hits) {
             if (!h.excluded && h.score >= minConfidence)
                 grouped.put(h.label, grouped.getOrDefault(h.label,0) + 1);
         }
-        if (!manualMarks.isEmpty())
-            grouped.put("Manual", manualMarks.size());
+        for (String label : manualClasses)
+            grouped.put(label, grouped.getOrDefault(label, 0) + 1);
 
         int total = 0;
         List<String> summary = new ArrayList<>();
@@ -506,14 +646,17 @@ public class MainActivity extends Activity {
         }
         countLabel.setText(String.valueOf(total));
         breakdownLabel.setText(summary.isEmpty()
-            ? "No objects found at this confidence. Try a lower confidence, enhanced scan, or manual markers."
-            : "Detected categories\n" + android.text.TextUtils.join("    •    ", summary));
+            ? "No shapes counted. Try another mode or settings.\n\n" + analysisNotes
+            : "Counted groups\n" + android.text.TextUtils.join("    •    ", summary) +
+              "\n\n" + analysisNotes);
     }
 
     private void handleImageTap(float x,float y) {
         if (currentImage == null) return;
         if (isMarkMode) {
             manualMarks.add(new PointF(x,y));
+            manualClasses.add("All objects".equals(selectedCategory) ?
+                    (countingMode == 1 ? "Item" : "Manual") : selectedCategory);
             updateCategoryChoices();
             refreshView();
             return;
@@ -532,7 +675,19 @@ public class MainActivity extends Activity {
             refreshView();
             message(chosen.excluded ? "Object removed from count." : "Object restored.");
         } else {
-            message("Use '+ Mark missed' to add a missing object.");
+            float radius = Math.min(currentImage.getWidth(), currentImage.getHeight()) * 0.03f;
+            for (int i = manualMarks.size() - 1; i >= 0; i--) {
+                PointF p = manualMarks.get(i);
+                if (Math.hypot(p.x - x, p.y - y) < radius) {
+                    manualMarks.remove(i);
+                    manualClasses.remove(i);
+                    updateCategoryChoices();
+                    refreshView();
+                    message("Manual marker removed.");
+                    return;
+                }
+            }
+            message("Tap + Mark missed to add; tap a counted box or marker to remove.");
         }
     }
 

@@ -1,23 +1,29 @@
-# ObjectCount PRO — offline Android app
+# ObjectCount PRO v2 — offline precision counting
 
-A standalone offline Android image object counter for Android 10+ (ARM64). Open any image from the Android file/photo picker or take a photo using the device's camera app.
+Standalone Android APK (Android 10+, ARM64), supports Android 16 tablets.
 
-Features:
-- On-device COCO category recognition using EfficientDet-Lite0 + TensorFlow Lite Task Vision.
-- Bounding boxes, class names, confidence scores and total/per-category count.
-- Adjustable detection confidence, optional 2×2 tile-enhanced scanning.
-- Manually mark missed items, or tap a detection to exclude it; reset corrections.
-- Save annotated JPEGs to Pictures/ObjectCountPRO or share with Android apps.
-- No network permission, no user account, no photo uploads.
-- Camera works through an Android camera intent + FileProvider.
+## Two counting algorithms
+1. **AI Common Objects** uses EfficientDet-Lite2 trained on the 80 COCO classes, with user-controlled confidence and overlapping tiled scans for small items. This replaces the less accurate Lite0 used in v1.
+2. **Repeated Items** uses OpenCV image segmentation and external contours, for *separated* repeated foreground shapes on a *relatively plain, uniform* background such as coins, nuts, screws, fruits, pills, and parts. Choose foreground/background contrast, color sensitivity and minimum item area. Works for items not trained into the AI model, but cannot identify what an item actually is. An ambiguous blob can represent multiple touching objects.
 
-### Accuracy limits
-This is a pretrained COCO 80-category object detector, not a universal counter. Dense items, tiny objects, ambiguous/untrained categories, overlaps, occlusion, and perspective can cause undercounts/overcounts. Displayed totals are estimates until manually verified. Tile scan may introduce additional false positives (duplicate suppression is heuristic). Test counting-critical uses with known examples.
+The displayed count is an **estimate**, not ground truth. Boxes show exactly what was counted. Use Mark Missed to add a marker, tap counted boxes to exclude wrong items, tap an existing manual marker to remove it. Select object classes to filter the count.
 
-### Build
-The GitHub Actions workflow downloads the pretrained TFLite model from the official TensorFlow bucket, places it in app/src/main/assets, runs Gradle assembleDebug, and uploads ObjectCountPRO.apk as a downloadable build artifact. Debug APK is Android-signed by the build tools and installable for testing.
+## Features
+- Full-size camera image via Android image capture and gallery document picker
+- Category tally and visual boxes
+- High-precision multi-tile AI inference (optional)
+- Repeated-item detection for high-contrast, plain-background separated items
+- Adjustable filters and corrections, export annotated JPEG
+- No internet permissions; models and OpenCV natives bundled
+- Dark premium tablet-friendly UI
+- Distinct app id from v1 so both builds can be installed side-by-side without signing-key conflicts
 
-Model URL: https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite0_detection_metadata_1.tflite
-Model origin: TensorFlow Lite examples (Apache-2.0).
+## Known limitations
+- The AI recognizes *only* its training categories, and can miss tiny or overlapping objects.
+- Contour mode may count background texture, shadows and reflections. Several touching items can merge into one contour, and partial/hidden items cannot be reliably reconstructed.
+- Verification against representative test images is needed for any accuracy-critical inventory or measurements.
 
-Developed by Gaurav Kharva.
+## Build
+GitHub Actions bundles the official EfficientDet-Lite2 TFLite model from Google's TensorFlow download storage. Android compiles with TFLite Task Vision and official OpenCV 4.10 AAR, then publishes **ObjectCountPRO-v2.apk** as a public GitHub Release.
+
+Developed By : Gaurav Kharva

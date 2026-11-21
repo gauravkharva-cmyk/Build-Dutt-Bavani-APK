@@ -1,7 +1,7 @@
 name: ObjectCount PRO - Build offline APK
 on:
   push:
-    branches: [objectcount-pro-apk-direct-20261121]
+    branches: [objectcount-pro-v2-precision-20261121]
     paths:
       - 'ObjectCountPro/**'
       - '.github/workflows/build-objectcount-pro.yml'
@@ -41,10 +41,10 @@ jobs:
           set -euxo pipefail
           mkdir -p ObjectCountPro/app/src/main/assets
           curl -fLsS --retry 5 --retry-delay 5 \
-            "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite0_detection_metadata_1.tflite" \
-            -o ObjectCountPro/app/src/main/assets/efficientdet-lite0.tflite
-          test "$(stat -c %s ObjectCountPro/app/src/main/assets/efficientdet-lite0.tflite)" -gt 3500000
-          sha256sum ObjectCountPro/app/src/main/assets/efficientdet-lite0.tflite
+            "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite2_detection_metadata_1.tflite" \
+            -o ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite
+          test "$(stat -c %s ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite)" -gt 10000000
+          sha256sum ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite
 
       - name: Build installable APK
         working-directory: ObjectCountPro
@@ -55,19 +55,19 @@ jobs:
           set -euxo pipefail
           APK=ObjectCountPro/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          unzip -Z1 "$APK" | grep -Fx 'assets/efficientdet-lite0.tflite'
-          cp "$APK" ObjectCountPRO.apk
-          du -h ObjectCountPRO.apk
-          sha256sum ObjectCountPRO.apk
+          unzip -Z1 "$APK" | grep -Fx 'assets/efficientdet-lite2.tflite'
+          cp "$APK" ObjectCountPRO-v2.apk
+          du -h ObjectCountPRO-v2.apk
+          sha256sum ObjectCountPRO-v2.apk
 
       - name: Publish APK as downloadable GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
-          gh release create "objectcountpro-direct-v1.0-20261121" \
-            "ObjectCountPRO.apk" \
-            --title "ObjectCount PRO v1.0 - Offline Android APK" \
-            --notes "Installable ARM64 Android APK. Gallery/camera image counting, 80 COCO object categories, confidence control, enhanced scan, manual corrections, and annotated export. Fully offline after installation." \
+          gh release create "objectcountpro-v2-precision-20261121" \
+            "ObjectCountPRO-v2.apk" \
+            --title "ObjectCount PRO v2.0 - Precision Counting Android APK" \
+            --notes "Offline ARM64 Android APK. V2 adds EfficientDet-Lite2 AI model, overlapping multi-tile scanning, independent OpenCV-based repeated-item counting for isolated objects on plain backgrounds, adjustable item size and sensitivity, manual correction and photo export. Counts are estimates: verify bounding boxes." \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY"

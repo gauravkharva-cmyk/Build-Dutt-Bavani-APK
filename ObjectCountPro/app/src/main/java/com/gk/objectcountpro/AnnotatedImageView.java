@@ -19,6 +19,7 @@ public class AnnotatedImageView extends View {
     private Bitmap bitmap;
     private List<DetectorEngine.Hit> hits = new ArrayList<>();
     private List<PointF> manual = new ArrayList<>();
+    private List<String> manualClasses = new ArrayList<>();
     private float threshold = 0.30f;
     private String selectedClass = "All objects";
     private TapListener onTap;
@@ -28,6 +29,7 @@ public class AnnotatedImageView extends View {
     public void setBitmap(Bitmap b) { bitmap = b; invalidate(); }
     public void setHits(List<DetectorEngine.Hit> h) { hits = h; invalidate(); }
     public void setManual(List<PointF> points) { manual = points; invalidate(); }
+    public void setManualClasses(List<String> classes) { manualClasses = classes; invalidate(); }
     public void setThreshold(float f) { threshold = f; invalidate(); }
     public void setSelectedClass(String s) { selectedClass = s; invalidate(); }
     public void setOnTap(TapListener listener) { onTap = listener; }
@@ -112,20 +114,20 @@ public class AnnotatedImageView extends View {
             p.setFakeBoldText(false);
         }
 
-        if ("All objects".equals(selectedClass) || "Manual".equals(selectedClass)) {
-            int i = 0;
-            for (PointF point : manual) {
-                i++;
-                float radius = Math.max(11f, 12f * ratio);
-                p.setStyle(Paint.Style.STROKE);
-                p.setStrokeWidth(stroke);
-                p.setColor(0xFFFFD66E);
-                canvas.drawCircle(point.x, point.y, radius, p);
-                canvas.drawLine(point.x-radius*1.4f, point.y,
-                                point.x+radius*1.4f, point.y, p);
-                canvas.drawLine(point.x, point.y-radius*1.4f,
-                                point.x, point.y+radius*1.4f, p);
-            }
+        int marks = Math.min(manual.size(), manualClasses.size());
+        for (int i=0; i<marks; i++) {
+            if (!"All objects".equals(selectedClass) &&
+                    !selectedClass.equals(manualClasses.get(i))) continue;
+            PointF point = manual.get(i);
+            float radius = Math.max(11f, 12f * ratio);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(stroke);
+            p.setColor(0xFFFFD66E);
+            canvas.drawCircle(point.x, point.y, radius, p);
+            canvas.drawLine(point.x-radius*1.25f, point.y,
+                            point.x+radius*1.25f, point.y, p);
+            canvas.drawLine(point.x, point.y-radius*1.25f,
+                            point.x, point.y+radius*1.25f, p);
         }
         p.setStyle(Paint.Style.FILL);
     }
