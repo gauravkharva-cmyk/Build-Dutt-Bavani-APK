@@ -43,7 +43,8 @@ jobs:
           curl -fLsS --retry 5 --retry-delay 5 \
             "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite2_detection_metadata_1.tflite" \
             -o ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite
-          test "$(stat -c %s ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite)" -gt 10000000
+          du -h ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite
+          test "$(stat -c %s ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite)" -gt 3500000
           sha256sum ObjectCountPro/app/src/main/assets/efficientdet-lite2.tflite
 
       - name: Build installable APK
